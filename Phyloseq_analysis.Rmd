@@ -1,0 +1,292 @@
+---
+title: "Phyloseq_analysis"
+output: html_notebook
+---
+
+
+```{r setup, include=FALSE}
+#library(seqinr)
+library(reshape)
+library(plyr)
+library(dplyr)
+library(plotly)
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(vegan)
+library(RColorBrewer)
+library(tidyverse)
+library(gridExtra)
+#library(limma)
+library(maps)
+library(reshape2)
+library(broom)
+library(ggpubr)
+library(phyloseq)
+library(DESeq2)
+library(stats4)
+library(minpack.lm)
+library(Hmisc)
+library(tidytext)
+library(stringr)
+library(ggrepel)
+library(ggExtra)
+```
+
+```{r}
+taxa_table = read_tsv('merged-taxonomy.tsv')
+ASV_table = read_tsv('16S-merged-table.txt')
+
+#somehow need to make #OTU_ID column into rownames:
+ASV_table1 = ASV_table[,-1] #make a new dataframe
+rownames(ASV_table1) = ASV_table$`#OTU_ID` #assign rownames to OTU_ID from original dataframe
+#replace NAs in ASV table to zero:
+ASV_table1[is.na(ASV_table1)] = 0
+
+#problem ASV_table1 dataframe is a tibble, therefore need to reset it to a dataframe:
+ASV_table1 = as.data.frame(ASV_table1)
+
+#Preparing ASV table
+otu_us <- ASV_table1[!grepl("Mitochondria", ASV_table$taxonomy),]
+otu_us <- otu_us[!grepl("Chloroplast", otu_us$taxonomy),]
+
+#Preparing TAXA
+tax_otu <- otu_us['taxonomy']
+tax_otu <- tax_otu %>%
+  separate(taxonomy, into=c("Kingdom", "Phylum", "Class", 
+                            "Order", "Family", "Genus", "Species"), sep="; ", remove=F)
+tax_otu[2:8] <- lapply(tax_otu[2:8], function(x) gsub(".*__", "", x))
+
+#Preparing OTU table again
+otu_us['taxonomy'] <- NULL
+
+#Preparing mapping file: 
+map_table = read.csv("metadata3.csv", header = T)
+map_table1 = map_table[,-9] #make a new dataframe
+rownames(map_table1) = map_table$Submission_ID #assign rownames to OTU_ID from original dataframe
+map_table1[1] <- NULL
+```
+
+
+
+```{r}
+#Taxonomic distribution 
+tax_v1 <- tax_otu
+# creating column where last taxonomic identifier is attached to the OTU id 
+features <- c(sprintf("OTU%05d", seq(1,10614)),"label")
+tax_v1$otu_id <- features
+tax_v1 <- tax_v1 %>% select(otu_id, everything())
+
+lastValue <- function(x) tail(x[!is.na(x)], 1)
+last_taxons<- apply(tax_v1, 1, lastValue)
+tax_v1$last_taxon <- last_taxons
+tax_v1$final_names <- paste(tax_v1$otu_id, tax_v1$last_taxon, sep='-')
+
+tax_v1$otu <- rownames(tax_v1)
+```
+
+#Generate Phyloseq Object:
+```{r}
+taxonomy_phyloseq<- tax_v1[rownames(tax_v1) %in% rownames(otu_us),]
+
+#Make phyloseq object:
+OTU <- otu_table(otu_us, taxa_are_rows=T)
+TAX <- tax_table(as.matrix(taxonomy_phyloseq))
+metadat <- sample_data(map_table1,errorIfNULL=TRUE)
+taxa_names(OTU)
+physeq <- merge_phyloseq(phyloseq(OTU, TAX), metadat)
+
+#physeq = subset_samples(physeq, Soil_type.x != "Sterile")
+
+```
+
+#Quality Control:
+```{r}
+#Filter samples that aren't relevant for analysis:
+physeq_filtered = subset_samples(physeq, Soil_inoculation != "Sterile" & Response != "NA")
+physeq_filtered <- subset_taxa(physeq_filtered, !is.na(Phylum) & !Phylum %in% c( "uncharacterized"))
+
+
+#Quality control steps of OTU table:
+physeq_trimmed <- prune_taxa(taxa_sums(physeq_filtered) > 0, physeq_filtered) #Remove taxa where total OTU count aka row count is greater than zero.
+physeq_trimmed <- prune_samples(sample_sums(physeq_trimmed)>=2000,physeq_trimmed) #Remove samples that contain less that 2000 reads, now we only have 271 samples:
+
+
+# Re-order the columns
+tax_table(physeq_trimmed) <- tax_table(physeq_trimmed)[,c(3:12,1,2)]
+rank.names(physeq_trimmed)
+
+
+#physeq_phyla = tax_glom(physeq_trimmed,taxrank=rank_names(physeq_trimmed)[2])
+#ps.relabund = transform_sample_counts(physeq_trimmed, function(x) x/sum(x))
+
+```
+
+#Export phyloseq object:
+```{r}
+
+#For differential analysis: 
+#saveRDS(physeq_trimmed, file="~/Library/CloudStorage/Box-Box/Lankau_Lab/Greenhouse_Exmpt_2018/16S/Differential_analysis/ps_merged.RDS")
+
+#For alpha diversity analysis: 
+saveRDS(physeq_trimmed, file="~/Library/CloudStorage/Box-Box/Lankau_Lab/Greenhouse_Exmpt_2018/16S/ps_merged.RDS")
+```
+
+
+Prevalance filtering: 
+```{r}
+prevdf = apply(X = otu_table(physeq_trimmed),
+               MARGIN = ifelse(taxa_are_rows(physeq_trimmed), yes = 1, no = 2),
+               FUN = function(x){sum(x > 0)})
+
+# Add taxonomy and total read counts to this data.frame
+prevdf = data.frame(Prevalence = prevdf,
+                    TotalAbundance = taxa_sums(physeq_trimmed),
+                    tax_table(physeq_trimmed))
+
+prevdf1 = subset(prevdf, otu %in% get_taxa_unique(physeq_trimmed, "otu"))
+
+ggplot(prevdf1, aes(TotalAbundance, Prevalence / nsamples(physeq_trimmed),color=Phylum)) +
+  # Include a guess for parameter hline (5%)...
+  geom_hline(yintercept = 0.05, alpha = 0.5, linetype = 2) +  
+  geom_point(size = 2, alpha = 0.7) +
+  scale_x_log10() +  
+  xlab("Total Abundance") + 
+  ylab("Prevalence [Frac. Samples]") +
+  facet_wrap(~Phylum) + 
+  theme(legend.position="none")
+
+
+prevalenceThreshold = 2
+prevalenceThreshold
+
+# Execute prevalence filter, using `prune_taxa()` function
+keepTaxa = rownames(prevdf1)[(prevdf1$Prevalence >= 2)]
+ps1 = prune_taxa(keepTaxa, physeq_trimmed)
+#saveRDS(ps1,"ps1.RDS")
+
+#saveRDS(ps1, file="~/Library/CloudStorage/Box-Box/Lankau_Lab/Greenhouse_Exmpt_2018/16S/Differential_analysis/ps1.RDS")
+
+#Keep taxa where prevalance is greater than 2
+
+```
+
+
+
+#Stacked Barchart of Phyloseq object:
+
+```{r}
+#Aggregate at the Phyla Level: 
+physeq_trimmed_i1 = subset_samples(ps1, Iteration == 1)
+physeq_trimmed_i5 = subset_samples(ps1, Iteration == 5)
+
+
+physeq_phyla_i1 = tax_glom(physeq_trimmed_i1, taxrank = rank_names(physeq_trimmed_i1)[2])
+physeq_phyla_i5 = tax_glom(physeq_trimmed_i5, taxrank = rank_names(physeq_trimmed_i5)[2])
+
+merged_clade_i1 = merge_samples(physeq_phyla_i1,"Clade")
+merged_clade_i5 = merge_samples(physeq_phyla_i5,"Clade")
+
+```
+
+Warning "NA introduced by coercion" we can ignore since it seems to be only the metadata that is effect by this....
+
+
+relativize sample counts: 
+```{r}
+ps.relabundPhyla_i1 = transform_sample_counts(merged_clade_i1, function(x) x/sum(x))
+ps.relabundPhyla_i5 = transform_sample_counts(merged_clade_i5, function(x) x/sum(x))
+```
+
+
+Plot stacked bar chart:
+```{r}
+plot_bar(ps.relabundPhyla_i1, fill = "Phylum")
+plot_bar(ps.relabundPhyla_i5, fill = "Phylum")
+
+```
+
+Color scheme isn't super great...let's change this to something a bit more discrete:
+
+
+```{r}
+library(RColorBrewer)
+
+nb.cols <- 36
+palette_colors = colorRampPalette(brewer.pal(8,"Set1"))(nb.cols)
+
+Clade_StackPlot_i1 = plot_bar(ps.relabundPhyla_i1, fill = "Phylum") + 
+  scale_fill_manual(values = palette_colors)+
+  xlab(expression(Potato~Clade))+
+  scale_x_discrete(labels=c("Andigenum","Chiletanum","Modern"))+
+  ylab(expression(Relative~Abundance))+
+  theme_bw()
+Clade_StackPlot_i1
+```
+
+
+```{r}
+nb.cols <- 36
+palette_colors = colorRampPalette(brewer.pal(8,"Set1"))(nb.cols)
+
+Clade_StackPlot_i5 = plot_bar(ps.relabundPhyla_i5, fill = "Phylum") + 
+  scale_fill_manual(values = palette_colors)+
+  xlab(expression(Potato~Clade))+
+  scale_x_discrete(labels=c("Andigenum","Chiletanum","Modern"))+
+  ylab(expression(Relative~Abundance))+
+  theme_bw()
+Clade_StackPlot_i5
+```
+
+
+**Relative abundance for + vs - responsive Plants for each Clade (Ch 3):**
+
+```{r}
+#Aggregate at the Phyla Level: 
+physeq_trimmed_P = subset_samples(ps1, Type_Response == "Positive")
+physeq_trimmed_N = subset_samples(ps1, Type_Response == "Negative")
+
+physeq_phyla_P = tax_glom(physeq_trimmed_P, taxrank = rank_names(physeq_trimmed_P)[2])
+physeq_phyla_N = tax_glom(physeq_trimmed_N, taxrank = rank_names(physeq_trimmed_N)[2])
+
+merged_clade_P = merge_samples(physeq_phyla_P,"Clade")
+merged_clade_N = merge_samples(physeq_phyla_N,"Clade")
+```
+
+```{r}
+ps.relabundPhyla_P = transform_sample_counts(merged_clade_P, function(x) x/sum(x))
+ps.relabundPhyla_N = transform_sample_counts(merged_clade_N, function(x) x/sum(x))
+```
+
+
+```{r}
+nb.cols <- 36
+palette_colors = colorRampPalette(brewer.pal(8,"Set1"))(nb.cols)
+
+Clade_StackPlot_P = plot_bar(ps.relabundPhyla_P, fill = "Phylum") + 
+  scale_fill_manual(values = palette_colors)+
+  xlab(expression(Potato~Clade))+
+  scale_x_discrete(labels=c("Andigenum","Chiletanum","Modern"))+
+  ylab(expression(Relative~Abundance))+
+  theme_bw()
+Clade_StackPlot_P
+```
+
+
+```{r}
+nb.cols <- 36
+palette_colors = colorRampPalette(brewer.pal(8,"Set1"))(nb.cols)
+
+Clade_StackPlot_N = plot_bar(ps.relabundPhyla_N, fill = "Phylum") + 
+  scale_fill_manual(values = palette_colors)+
+  xlab(expression(Potato~Clade))+
+  scale_x_discrete(labels=c("Andigenum","Chiletanum","Modern"))+
+  ylab(expression(Relative~Abundance))+
+  theme_bw()
+Clade_StackPlot_N
+```
+
+
+
+
+
