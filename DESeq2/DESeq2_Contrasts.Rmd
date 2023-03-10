@@ -1,0 +1,280 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+Rick now wants to answer which microbes are unique due to Clade and are correlated to plant response. 
+
+```{r}
+library(phyloseq)
+library(tidyverse)
+library(ggplot2)
+library(lme4)
+library(lmerTest)
+library(emmeans)
+library(DESeq2)
+```
+
+
+Andigenum vs Chiletanum vs Modern Contrast: Used following tutorial
+https://github.com/tavareshugo/tutorial_DESeq2_contrasts/blob/main/DESeq2_contrasts.md
+
+```{r}
+ps1 = readRDS(file = "ps1.RDS")
+```
+
+
+```{r}
+physeq_Con = subset_samples(ps1, Response != "NA" & Soil_inoculation != "Sterile")
+physeq_Con = subset_samples(physeq_Con, sample_sums(physeq_Con) != 0)
+
+#Contrast between Clades:
+diagdds_cladeCont = phyloseq_to_deseq2(physeq_Con, ~ Clade)
+
+#Calculate geometic means for DESeq2:
+gm_mean = function(x, na.rm=TRUE){
+  exp(sum(log(x[x > 0]), na.rm=na.rm) / length(x))
+}
+geoMeans = apply(counts(diagdds_cladeCont), 1, gm_mean)
+
+#Generate Contrasts:
+design(diagdds_cladeCont) <- ~ 1 + Clade
+diagdds = estimateSizeFactors(diagdds_cladeCont, geoMeans = geoMeans)
+diagdds_cladeCont = DESeq(diagdds, fitType="parametric")
+resultsNames(diagdds_cladeCont)
+
+res1_Chil_And <- results(diagdds_cladeCont, contrast = list("Clade_C_vs_A"))
+res1_Mod_And <- results(diagdds_cladeCont, contrast = list("Clade_M_vs_A"))
+res1_Mod_Chil <- results(diagdds_cladeCont, contrast = list("Clade_M_vs_A","Clade_C_vs_A"))
+
+
+
+mod_mat = model.matrix(design(diagdds_cladeCont), colData(diagdds_cladeCont))
+
+#Calculating coefficients for DESeq2 output for each Clade
+Modern <- colMeans(mod_mat[diagdds_cladeCont$Clade == "M", ])
+Chiletanum <- colMeans(mod_mat[diagdds_cladeCont$Clade == "C", ])
+Andigenum <- colMeans(mod_mat[diagdds_cladeCont$Clade == "A", ])
+
+#And we can now define any contrasts we want:
+
+res2_Mod_Chil <- results(diagdds_cladeCont, contrast = Modern - Chiletanum)
+res2_Mod_And <- results(diagdds_cladeCont, contrast = Modern - Andigenum)
+res2_Chil_And <- results(diagdds_cladeCont, contrast = Chiletanum - Andigenum)
+
+#Generate Tables for ASVs:
+
+resC_Mod_Chil = cbind(as(res2_Mod_Chil, "data.frame"), as(tax_table(physeq_Con)[rownames(res2_Mod_Chil), ], "matrix"))
+resC_Mod_And = cbind(as(res2_Mod_And, "data.frame"), as(tax_table(physeq_Con)[rownames(res2_Mod_And), ], "matrix"))
+resC_Chil_And = cbind(as(res2_Chil_And, "data.frame"), as(tax_table(physeq_Con)[rownames(res2_Chil_And), ], "matrix"))
+```
+
+Contrast Coefficients:
+$\beta$ contrast coefficient for Modern (1,0,1), Chiletanum (1,1,0), Andigenum (1,0,0)
+
+##Phyla Contrasts:
+```{r}
+physeq_Con = subset_samples(ps1, Response != "NA" & Soil_inoculation != "Sterile")
+physeq_Con = subset_samples(physeq_Con, sample_sums(physeq_Con) != 0)
+physeq_Con_Phyla = tax_glom(physeq_Con,taxrank=rank_names(physeq_Con)[2])
+physeq_Con_Phyla = subset_taxa(physeq_Con_Phyla, Phylum != "NA")
+physeq_Con_Phyla = subset_samples(physeq_Con_Phyla, sample_sums(physeq_Con_Phyla) != 0)
+
+#Contrast between Clades:
+diagdds_cladeCont_Phyla = phyloseq_to_deseq2(physeq_Con_Phyla, ~ Clade)
+
+#Calculate geometic means for DESeq2:
+gm_mean = function(x, na.rm=TRUE){
+  exp(sum(log(x[x > 0]), na.rm=na.rm) / length(x))
+}
+geoMeans = apply(counts(diagdds_cladeCont_Phyla), 1, gm_mean)
+
+#Generate Contrasts:
+design(diagdds_cladeCont_Phyla) <- ~ 1 + Clade
+diagdds = estimateSizeFactors(diagdds_cladeCont_Phyla, geoMeans = geoMeans)
+diagdds_cladeCont_Phyla = DESeq(diagdds, fitType="parametric")
+resultsNames(diagdds_cladeCont_Phyla)
+
+res1_Chil_And_Phyla <- results(diagdds_cladeCont_Phyla, contrast = list("Clade_C_vs_A"))
+res1_Mod_And_Phyla <- results(diagdds_cladeCont_Phyla, contrast = list("Clade_M_vs_A"))
+res1_Mod_Chil_Phyla <- results(diagdds_cladeCont_Phyla, contrast = list("Clade_M_vs_A","Clade_C_vs_A"))
+
+
+
+mod_mat = model.matrix(design(diagdds_cladeCont_Phyla), colData(diagdds_cladeCont_Phyla))
+
+#Calculating coefficients for DESeq2 output for each Clade
+Modern_Phyla <- colMeans(mod_mat[diagdds_cladeCont_Phyla$Clade == "M", ])
+Chiletanum_Phyla <- colMeans(mod_mat[diagdds_cladeCont_Phyla$Clade == "C", ])
+Andigenum_Phyla <- colMeans(mod_mat[diagdds_cladeCont_Phyla$Clade == "A", ])
+
+#And we can now define any contrasts we want:
+
+res2_Mod_Chil_Phyla <- results(diagdds_cladeCont_Phyla, contrast = Modern - Chiletanum)
+res2_Mod_And_Phyla <- results(diagdds_cladeCont_Phyla, contrast = Modern - Andigenum)
+res2_Chil_And_Phyla <- results(diagdds_cladeCont_Phyla, contrast = Chiletanum - Andigenum)
+
+#Generate Tables for ASVs:
+
+resC_Mod_Chil_Phyla = cbind(as(res2_Mod_Chil_Phyla, "data.frame"), as(tax_table(physeq_Con_Phyla)[rownames(res2_Mod_Chil_Phyla), ], "matrix"))
+resC_Mod_And_Phyla = cbind(as(res2_Mod_And_Phyla, "data.frame"), as(tax_table(physeq_Con_Phyla)[rownames(res2_Mod_And_Phyla), ], "matrix"))
+resC_Chil_And_Phyla = cbind(as(res2_Chil_And_Phyla, "data.frame"), as(tax_table(physeq_Con_Phyla)[rownames(res2_Chil_And_Phyla), ], "matrix"))
+```
+
+
+#Scatter Plots of ASVs grouped by Phyla
+
+basically we are asking which of these are differentially abundance due to Clade. 
+
+```{r}
+
+library(RColorBrewer)
+nb.cols <- 32
+palette_colors = colorRampPalette(brewer.pal(8,"Set2"))(nb.cols)
+
+Plot_Cont = ggplot(resC_Mod_Chil,aes(x=Phylum, y=log2FoldChange, alpha= if_else(pvalue < 0.05,20,5), fill=Phylum))+
+  geom_jitter(shape=21, stroke=1, aes(size= 'baseMean'), width=0.2)+
+  scale_fill_manual(values = palette_colors)+
+  theme(axis.text.x = element_text(angle=45, hjust=1, size=5))+
+  #facet_wrap(~Phylum, scales="free_x")+
+  theme(legend.position="none")+
+  geom_hline(yintercept=0)+
+  ylab("Response to Modern vs Chilatanum (log2-fold change)")
+Plot_Cont
+```
+Interpreting this graph is weird. Positive values indicate ASVs that are present in Moderns while negative values are ASVs present in Chiletanum Landraces. We can see more diversity of ASVs in Chiletanum at the Phylum level that are statistically significant. While, see more diversity at finer scales for Modern clade (more # of individual ASVs). 
+
+Rick note: 
+
+
+```{r}
+library(RColorBrewer)
+nb.cols <- 32
+palette_colors = colorRampPalette(brewer.pal(8,"Set2"))(nb.cols)
+
+Plot_Cont = ggplot(resC_Mod_And,aes(x=Phylum, y=log2FoldChange, alpha= if_else(pvalue < 0.05,20,5), fill=Phylum))+
+  geom_jitter(shape=21, stroke=1, aes(size= 'baseMean'), width=0.2)+
+  scale_fill_manual(values = palette_colors)+
+  theme(axis.text.x = element_text(angle=45, hjust=1, size=5))+
+  #facet_wrap(~Phylum, scales="free_x")+
+  theme(legend.position="none")+
+  geom_hline(yintercept=0)+
+  ylab("Response to Modern vs Andigenum (log2-fold change)")
+Plot_Cont
+```
+Positive values are ASVs more present in Moderns while negative values are ASVs more present in Andigenun landraces. Simiarly to Chiletanum, see more bacteriodetes in Andigenum compared to modern. Modern seem to both at fine and broader scales recruit more diverse mix of bacterial ASVs. 
+
+
+```{r}
+library(RColorBrewer)
+nb.cols <- 32
+palette_colors = colorRampPalette(brewer.pal(8,"Set2"))(nb.cols)
+
+Plot_Cont = ggplot(resC_Chil_And,aes(x=Phylum, y=log2FoldChange, alpha= if_else(pvalue < 0.05,20,5), fill=Phylum))+
+  geom_jitter(shape=21, stroke=1, aes(size= 'baseMean'), width=0.2)+
+  scale_fill_manual(values = palette_colors)+
+  theme(axis.text.x = element_text(angle=45, hjust=1, size=5))+
+  #facet_wrap(~Phylum, scales="free_x")+
+  theme(legend.position="none")+
+  geom_hline(yintercept=0)+
+  ylab("Response of Chilatanum vs Andigenum (log2-fold change)")
+Plot_Cont
+```
+See similar richness in between Chiletanum and Andigenum landraces at the Phyla level. However, see ASV level Chiletanum having greater number of unique ASVs compared to Andigenum. 
+
+
+
+#Contrast of DESeq2 differential abudance based on Phyla differences:
+
+```{r}
+resC_Mod_Chil_Phyla = subset(resC_Mod_Chil_Phyla, Phylum != "NA" & log2FoldChange != "NA" & padj != "NA")
+TaxOrder = resC_Mod_Chil_Phyla %>%
+  group_by(Phylum)%>%
+  summarize(Total=n()) %>%
+  arrange(-Total)
+TaxOrder = TaxOrder$Phylum
+resC_Mod_Chil_Phyla$Phylum = ordered(resC_Mod_Chil_Phyla$Phylum, levels=TaxOrder)
+
+library(RColorBrewer)
+nb.cols <- 36
+palette_colors = colorRampPalette(brewer.pal(8,"Set2"))(nb.cols)
+
+Plot_CvM_Phyla = ggplot(resC_Mod_Chil_Phyla,aes(x=Phylum, y=log2FoldChange, alpha= if_else(pvalue < 0.05,20,5), fill=Phylum))+
+  geom_jitter(shape=21, stroke=1, aes(size=baseMean), width=0.2)+
+  scale_size(guide=FALSE)+
+  scale_fill_manual(values = palette_colors)+
+  theme_bw()+
+  theme(axis.text.x = element_text(angle=45, hjust=1, size=5))+
+  theme(axis.title.y = element_text(size=10))+
+  theme(legend.position="none")+
+  geom_hline(yintercept=0)+
+  ylab(expression(Response~to~Chiletanum~vs~Modern(log[2]-fold~change)))+
+  theme(axis.text.x = element_text(face="italic"),
+             legend.text = element_text(face="italic"),
+             axis.title.x = element_blank())
+Plot_CvM_Phyla
+
+```
+
+
+
+```{r}
+resC_Mod_And_Phyla = subset(resC_Mod_And_Phyla, Phylum != "NA" & log2FoldChange != "NA" & padj != "NA")
+TaxOrder = resC_Mod_And_Phyla %>%
+  group_by(Phylum)%>%
+  summarize(Total=n()) %>%
+  arrange(-Total)
+TaxOrder = TaxOrder$Phylum
+resC_Mod_And_Phyla$Phylum = ordered(resC_Mod_And_Phyla$Phylum, levels=TaxOrder)
+
+library(RColorBrewer)
+nb.cols <- 36
+palette_colors = colorRampPalette(brewer.pal(8,"Set2"))(nb.cols)
+
+Plot_AvM_Phyla = ggplot(resC_Mod_And_Phyla,aes(x=Phylum, y=log2FoldChange, alpha= if_else(pvalue < 0.05,20,5), fill=Phylum))+
+  geom_jitter(shape=21, stroke=1, aes(size=baseMean), width=0.2)+
+  scale_size(guide=FALSE)+
+  scale_fill_manual(values = palette_colors)+
+  theme_bw()+
+  theme(axis.text.x = element_text(angle=45, hjust=1, size=5))+
+  theme(axis.title.y = element_text(size=10))+
+  theme(legend.position="none")+
+  geom_hline(yintercept=0)+
+  ylab(expression(Response~to~Andigenum~vs~Modern(log[2]-fold~change)))+
+  theme(axis.text.x = element_text(face="italic"),
+             legend.text = element_text(face="italic"),
+             axis.title.x = element_blank())
+Plot_AvM_Phyla
+
+```
+
+
+```{r}
+resC_Chil_And_Phyla = subset(resC_Chil_And_Phyla, Phylum != "NA" & log2FoldChange != "NA" & padj != "NA")
+TaxOrder = resC_Chil_And_Phyla %>%
+  group_by(Phylum)%>%
+  summarize(Total=n()) %>%
+  arrange(-Total)
+TaxOrder = TaxOrder$Phylum
+resC_Chil_And_Phyla$Phylum = ordered(resC_Chil_And_Phyla$Phylum, levels=TaxOrder)
+
+library(RColorBrewer)
+nb.cols <- 36
+palette_colors = colorRampPalette(brewer.pal(8,"Set2"))(nb.cols)
+
+Plot_CvA_Phyla = ggplot(resC_Chil_And_Phyla,aes(x=Phylum, y=log2FoldChange, alpha= if_else(pvalue < 0.05,20,5), fill=Phylum))+
+  geom_jitter(shape=21, stroke=1, aes(size=baseMean), width=0.2)+
+  scale_size(guide=FALSE)+
+  scale_fill_manual(values = palette_colors)+
+  theme_bw()+
+  theme(axis.text.x = element_text(angle=45, hjust=1, size=5))+
+  theme(axis.title.y = element_text(size=10))+
+  theme(legend.position="none")+
+  geom_hline(yintercept=0)+
+  ylab(expression(Response~to~Andigenum~vs~Chiletanum(log[2]-fold~change)))+
+  theme(axis.text.x = element_text(face="italic"),
+             legend.text = element_text(face="italic"),
+             axis.title.x = element_blank())
+Plot_CvA_Phyla
+```
+

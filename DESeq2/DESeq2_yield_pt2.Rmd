@@ -1,0 +1,559 @@
+---
+title: "DESeq2_yield2"
+output: html_notebook
+---
+
+#Aim 2: Just for the moderns selection, what is different +/- selected soils
+
+**Notes/Rick's comments**: Adonis selection effect on composition. Deseq2 on selection and response. Are you getting the same taxa?…
+
+  + No persistent link between yield and MC for Andigenum and Chiletanum. Curious if there strongly interacting taxa best measure Deseq2 response across all iteration. 
+
+  + Moderns and Hancock: selection worked -> what is different P vs N soils, Stacked bar chart to visualize difference. Deseq2 at Phyla level…
+
+Import required Packages:
+```{r}
+library(phyloseq)
+library(tidyverse)
+library(vegan)
+library(ggplot2)
+library(lme4)
+library(lmerTest)
+library(emmeans)
+library(DESeq2)
+```
+
+Import Phyloseq object:
+```{r}
+physeq_trimmed = readRDS(file = "ps_merged.RDS")
+```
+
+Functions to be used for analysis:
+```{r}
+#Function 1:
+geomMeans_DESeq2_Res = function(ps_object){
+diagdds_clade= phyloseq_to_deseq2(ps_object, ~ Response)
+
+gm_mean = function(x, na.rm=TRUE){
+  exp(sum(log(x[x > 0]), na.rm=na.rm) / length(x))
+}
+
+geoMeans = apply(counts(diagdds_clade), 1, gm_mean)
+diagdds = estimateSizeFactors(diagdds_clade, geoMeans = geoMeans)
+
+diagdds_clade = DESeq(diagdds, fitType="parametric")
+return(diagdds_clade)
+}
+
+#Use Parametric because: There is a capping of gene-wise dispersion values (you probably have a number of genes with all 0's and then a very high count for a single sample), and the parametric trend is less affected by this. The local trend is flattening on the left side.
+
+
+#Function 2:
+geomMeans_DESeq2_Select = function(ps_object){
+diagdds_clade= phyloseq_to_deseq2(ps_object, ~ Selection.x)
+
+gm_mean = function(x, na.rm=TRUE){
+  exp(sum(log(x[x > 0]), na.rm=na.rm) / length(x))
+}
+
+geoMeans = apply(counts(diagdds_clade), 1, gm_mean)
+diagdds = estimateSizeFactors(diagdds_clade, geoMeans = geoMeans)
+
+diagdds_clade = DESeq(diagdds, fitType="parametric")
+return(diagdds_clade)
+}
+
+#Function 3: significant taxa < alpha
+DESeq_table = function(DESeq2_ds,ps_object){
+res = results(DESeq2_ds, cooksCutoff = FALSE)
+alpha = 0.05
+sigtab = res[which(res$padj < alpha), ]
+sigtab = cbind(as(sigtab, "data.frame"), as(tax_table(ps_object)[rownames(sigtab), ], "matrix"))
+return(sigtab)
+}
+
+#Function 4: All results
+
+res_table = function(diagdds_clade,ps_object){
+  res = results(diagdds_clade, cooksCutoff = FALSE)
+  res_A_Phyla = cbind(as(res, "data.frame"), as(tax_table(ps_object)[rownames(res), ], "matrix"))
+}
+
+```
+
+
+
+```{r}
+#For Genus level treatments:
+
+physeq_ModernH = subset_samples(physeq_trimmed, Clade == 'M' & Response != "NA" & Soil_inoculation != "Sterile" & Iteration == 5 & Soil_type.x == "Hancock")
+physeq_ModernH <- tax_glom(physeq_ModernH, taxrank = "Genus", NArm = F)
+physeq_ModernH = filter_taxa(physeq_ModernH, function(x) sum(x > 0) > (0.1*length(x)), TRUE)
+
+#At Genus level for Selection:
+diagdds_SelectM_ASV = geomMeans_DESeq2_Select(physeq_ModernH)
+res_SelectM_GenusH = res_table(diagdds_SelectM_ASV,physeq_ModernH)
+sigtab_SelectM_GenusH = res_SelectM_GenusH[which(res_SelectM_GenusH$padj < 0.05), ]
+
+#At Genus level for Response:
+diagdds_ResM_ASV = geomMeans_DESeq2_Res(physeq_ModernH)
+res_ResM_GenusH = res_table(diagdds_ResM_ASV,physeq_ModernH)
+sigtab_ResM_GenusH = res_ResM_GenusH[which(res_ResM_GenusH$padj < 0.05), ]
+
+
+```
+
+Plot Response:
+```{r}
+# Ordering factor by logfoldchange in numerical order
+TaxOrder = res_ResM_GenusH %>%
+  group_by(Phylum)%>%
+  summarize(Total=n()) %>%
+  arrange(-Total)
+TaxOrder = TaxOrder$Phylum
+res_ResM_GenusH$Phylum = ordered(res_ResM_GenusH$Phylum, levels=TaxOrder)
+
+nb.cols <- 41 #Number of colors to use for graph for RColorBrewer
+palette_colors = colorRampPalette(brewer.pal(8,"Set1"))(nb.cols)
+
+# Making the plot
+M_ResH_Plot = ggplot(res_ResM_GenusH,aes(x=Phylum, y=log2FoldChange, alpha= if_else(padj < 0.05,20,5), fill=Phylum))+
+  geom_jitter(shape=21, stroke=1, aes(size=baseMean), width=0.2)+
+  scale_size(guide=FALSE)+
+  scale_fill_manual(values = palette_colors)+
+  theme_bw()+
+  theme(axis.text.x = element_text(angle=45, hjust=1, size=10))+
+  theme(axis.title.y = element_text(size=10))+
+  theme(legend.position="none")+
+  geom_hline(yintercept=0)+
+  ylab(expression(Response~to~Plant~Growth(log[2]-fold~change)))+
+  theme(axis.text.x = element_text(face="italic"),
+             legend.text = element_text(face="italic"),
+             axis.title.x = element_blank())
+M_ResH_Plot
+```
+
+
+Plot Selection:
+```{r}
+TaxOrder = res_SelectM_GenusH %>%
+  group_by(Phylum)%>%
+  summarize(Total=n()) %>%
+  arrange(-Total)
+TaxOrder = TaxOrder$Phylum
+res_SelectM_GenusH$Phylum = ordered(res_SelectM_GenusH$Phylum, levels=TaxOrder)
+
+nb.cols <- 41 #Number of colors to use for graph for RColorBrewer
+palette_colors = colorRampPalette(brewer.pal(8,"Set1"))(nb.cols)
+
+# Making the plot
+M_SelectH_Plot = ggplot(res_SelectM_GenusH,aes(x=Phylum, y=log2FoldChange, alpha= if_else(padj < 0.05,20,5), fill=Phylum))+
+  geom_jitter(shape=21, stroke=1, aes(size=baseMean), width=0.2)+
+  scale_size(guide=FALSE)+
+  scale_fill_manual(values = palette_colors)+
+  theme_bw()+
+  theme(axis.text.x = element_text(angle=45, hjust=1, size=10))+
+  theme(axis.title.y = element_text(size=10))+
+  theme(legend.position="none")+
+  geom_hline(yintercept=0)+
+  ylab(expression(Response~to~Selection(log[2]-fold~change)))+
+  theme(axis.text.x = element_text(face="italic"),
+             legend.text = element_text(face="italic"),
+             axis.title.x = element_blank())
+M_SelectH_Plot
+```
+
+
+```{r}
+#installation guide here: https://github.com/js229/Vennerable
+library(Vennerable)
+
+restab_ResM_Genus_P = subset(res_ResM_GenusH, log2FoldChange > 0)
+restab_SelectM_P = subset(res_SelectM_GenusH, log2FoldChange > 0)
+
+#generate a list of significant ASVs that are were enriched
+my_list <- list(restab_ResM_Genus_P$Genus,restab_SelectM_P$Genus)
+names(my_list) = c("Response","Selection")
+Vstem <- Venn(my_list)
+plot(Vstem, doWeights = FALSE)
+```
+
+
+```{r}
+Vstem@IntersectionSets[["11"]]
+```
+
+
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+#Phyla:
+
+```{r}
+#Phyloseq averaging of abundance for different phylogeny levels
+physeq_ModernH = subset_samples(physeq_trimmed, Clade == 'M' & Response != "NA" & Soil_inoculation != "Sterile" & Iteration == 5 & Soil_type.x == "Hancock")
+physeq_phylaM_H = tax_glom(physeq_ModernH,taxrank=rank_names(physeq_ModernH)[2])
+physeq_phylaM_H = filter_taxa(physeq_phylaM_H, function(x) sum(x > 0) > (0.1*length(x)), TRUE)
+
+
+#DESeq2 function: 
+diagdds_ResM_Phyla = geomMeans_DESeq2_Res(physeq_phylaM_H)
+diagdds_SelectM_Phyla = geomMeans_DESeq2_Select(physeq_phylaM_H)
+
+#Making Tables for all taxa 
+res_ResM_PhylaH = res_table(diagdds_ResM_Phyla,physeq_phylaM_H)
+res_ResM_PhylaH = subset(res_ResM_PhylaH, log2FoldChange != "NA")
+
+res_SelectM_PhylaH = res_table(diagdds_SelectM_Phyla,physeq_phylaM_H)
+res_SelectM_PhylaH = subset(res_SelectM_PhylaH, log2FoldChange != "NA")
+
+#Making Tables for significant taxa only:
+sigtab_SelectM_PhylaH = res_SelectM_PhylaH[which(res_SelectM_PhylaH$padj < 0.05),]
+sigtab_ResM_PhylaH = res_ResM_PhylaH[which(res_ResM_PhylaH$padj < 0.05),]
+
+```
+
+
+```{r}
+#installation guide here: https://github.com/js229/Vennerable
+library(Vennerable)
+
+restab_ResM_Phyla_P = subset(res_ResM_PhylaH, log2FoldChange > 0)
+restab_SelectM_Phyla_P = subset(res_SelectM_PhylaH, log2FoldChange > 0)
+
+#generate a list of significant ASVs that are were enriched
+my_list <- list(restab_ResM_Phyla_P$Phylum,restab_SelectM_Phyla_P$Phylum)
+names(my_list) = c("Response","Selection")
+Vstem <- Venn(my_list)
+plot(Vstem, doWeights = FALSE)
+```
+
+
+Visualizing Results:
+
+**Response**
+```{r}
+TaxOrder = res_ResM_PhylaH %>%
+  group_by(Phylum)%>%
+  arrange(-baseMean)
+TaxOrder = TaxOrder$Phylum
+res_ResM_PhylaH$Phylum = ordered(res_ResM_PhylaH$Phylum, levels=TaxOrder)
+
+nb.cols <- 41 #Number of colors to use for graph for RColorBrewer
+palette_colors = colorRampPalette(brewer.pal(8,"Set1"))(nb.cols)
+
+# Making the plot
+M_ResH_PhylaPlot = ggplot(res_ResM_PhylaH,aes(x=Phylum, y=log2FoldChange, alpha= if_else(padj < 0.05,20,5), fill=Phylum))+
+  geom_jitter(shape=21, stroke=1, aes(size=baseMean), width=0.2)+
+  scale_size(guide=FALSE)+
+  scale_fill_manual(values = palette_colors)+
+  theme_bw()+
+  theme(axis.text.x = element_text(angle=45, hjust=1, size=10))+
+  theme(axis.title.y = element_text(size=10))+
+  theme(legend.position="none")+
+  geom_hline(yintercept=0)+
+  ylab(expression(Response~to~Plant~Growth(log[2]-fold~change)))+
+  theme(axis.text.x = element_text(face="italic"),
+             legend.text = element_text(face="italic"),
+             axis.title.x = element_blank())
+M_ResH_PhylaPlot
+```
+Moderns see broader and larger number of ASVs differentially abundant with Plant response. 
+
+```{r}
+#Phyloseq averaging of abundance for different phylogeny levels
+physeq_ModernW = subset_samples(physeq_trimmed, Clade == 'M' & Response != "NA" & Soil_inoculation != "Sterile" & Iteration == 5 & Soil_type.x == "Winterfell")
+physeq_phylaM_W = tax_glom(physeq_ModernH,taxrank=rank_names(physeq_ModernH)[2])
+physeq_phylaM_W = filter_taxa(physeq_phylaM_H, function(x) sum(x > 0) > (0.1*length(x)), TRUE)
+
+#DESeq2 function: 
+diagdds_ResM_Phyla = geomMeans_DESeq2_Res(physeq_phylaM_W)
+diagdds_SelectM_Phyla = geomMeans_DESeq2_Select(physeq_phylaM_W)
+
+#Making Tables for all taxa 
+res_ResM_PhylaW = res_table(diagdds_ResM_Phyla,physeq_phylaM_W)
+res_ResM_PhylaW = subset(res_ResM_PhylaH, log2FoldChange != "NA")
+
+res_SelectM_PhylaW = res_table(diagdds_SelectM_Phyla,physeq_phylaM_W)
+res_SelectM_PhylaW = subset(res_SelectM_PhylaH, log2FoldChange != "NA")
+
+#Making Tables for significant taxa only:
+sigtab_SelectM_PhylaW = res_SelectM_PhylaH[which(res_SelectM_PhylaH$padj < 0.05),]
+sigtab_ResM_PhylaW = res_ResM_PhylaH[which(res_ResM_PhylaH$padj < 0.05),]
+
+```
+
+
+```{r}
+TaxOrder = res_ResM_PhylaW %>%
+  group_by(Phylum)%>%
+  arrange(-baseMean)
+TaxOrder = TaxOrder$Phylum
+res_ResM_PhylaW$Phylum = ordered(res_ResM_PhylaW$Phylum, levels=TaxOrder)
+
+nb.cols <- 41 #Number of colors to use for graph for RColorBrewer
+palette_colors = colorRampPalette(brewer.pal(8,"Set1"))(nb.cols)
+
+# Making the plot
+M_ResW_PhylaPlot = ggplot(res_ResM_PhylaW,aes(x=Phylum, y=log2FoldChange, alpha= if_else(padj < 0.05,20,5), fill=Phylum))+
+  geom_jitter(shape=21, stroke=1, aes(size=baseMean), width=0.2)+
+  scale_size(guide=FALSE)+
+  scale_fill_manual(values = palette_colors)+
+  theme_bw()+
+  theme(axis.text.x = element_text(angle=45, hjust=1, size=10))+
+  theme(axis.title.y = element_text(size=10))+
+  theme(legend.position="none")+
+  geom_hline(yintercept=0)+
+  ylab(expression(Response~to~Plant~Growth(log[2]-fold~change)))+
+  theme(axis.text.x = element_text(face="italic"),
+             legend.text = element_text(face="italic"),
+             axis.title.x = element_blank())
+M_ResW_PhylaPlot
+```
+
+
+
+**Selection**
+```{r}
+res_SelectM_PhylaW = subset(res_SelectM_PhylaW, Phylum != "NA" & log2FoldChange != "NA" & padj != "NA")
+TaxOrder = res_SelectM_PhylaW %>%
+  arrange(-baseMean)
+TaxOrder = TaxOrder$Phylum
+res_SelectM_PhylaW$Phylum = ordered(res_SelectM_PhylaW$Phylum, levels=TaxOrder)
+
+nb.cols <- 41 #Number of colors to use for graph for RColorBrewer
+palette_colors = colorRampPalette(brewer.pal(8,"Set2"))(nb.cols)
+
+# Making the plot
+M_SelectW_PhylaPlot = ggplot(res_SelectM_PhylaW,aes(x=Phylum, y=log2FoldChange, alpha= if_else(padj < 0.05,20,5), fill=Phylum))+
+  geom_jitter(shape=21, stroke=1, aes(size=baseMean), width=0.2)+
+  scale_size(guide=FALSE)+
+  scale_fill_manual(values = palette_colors)+
+  theme_bw()+
+  theme(axis.text.x = element_text(angle=45, hjust=1, size=10))+
+  theme(axis.title.y = element_text(size=10))+
+  theme(legend.position="none")+
+  geom_hline(yintercept=0)+
+  ylab(expression(Response~to~Selection(log[2]-fold~change)))+
+  theme(axis.text.x = element_text(face="italic"),
+             legend.text = element_text(face="italic"),
+             axis.title.x = element_blank())
+M_SelectW_PhylaPlot
+```
+
+
+```{r}
+#installation guide here: https://github.com/js229/Vennerable
+library(Vennerable)
+
+sigtab_ResM_ASV_P = subset(res_ResM_PhylaW, log2FoldChange > 0)
+sigtab_M_Select_P = subset(res_SelectM_PhylaW, log2FoldChange > 0)
+
+#generate a list of significant ASVs that are were enriched
+my_list <- list(sigtab_ResM_ASV_P$Phylum,sigtab_M_Select_P$Phylum)
+names(my_list) = c("Response","Selected")
+Vstem <- Venn(my_list)
+plot(Vstem, doWeights = FALSE)
+```
+
+```{r}
+Vstem@IntersectionSets
+```
+
+
+
+
+```{r}
+#installation guide here: https://github.com/js229/Vennerable
+library(Vennerable)
+
+sigtab_ResM_ASV_N = subset(sigtab_ResM_ASV, log2FoldChange < 0)
+sigtab_M_Select_N = subset(sigtab_SelectM_ASV, log2FoldChange < 0)
+
+#generate a list of significant ASVs that are were enriched
+my_list <- list(sigtab_ResM_ASV_N$Phyla,sigtab_M_Select_N$Family)
+names(my_list) = c("Response","Selected")
+Vstem <- Venn(my_list)
+plot(Vstem, doWeights = FALSE)
+```
+
+```{r}
+Vstem@IntersectionSets
+```
+
+***
+
+
+
+```{r}
+#Phyloseq averaging of abundance for different phylogeny levels
+physeq_ModernW = subset_samples(physeq_trimmed, Clade == 'M' & Response != "NA" & Soil_inoculation != "Sterile" & Iteration == 5 & Soil_type.x == "Winterfell")
+physeq_phylaM_W = tax_glom(physeq_ModernW,taxrank=rank_names(physeq_ModernW)[2])
+physeq_phylaM_W = filter_taxa(physeq_phylaM_W, function(x) sum(x > 0) > (0.1*length(x)), TRUE)
+
+
+#DESeq2 function: 
+diagdds_ResM_Phyla = geomMeans_DESeq2_Res(physeq_phylaM_W)
+diagdds_SelectM_Phyla = geomMeans_DESeq2_Select(physeq_phylaM_W)
+
+#Making Tables for all taxa 
+res_ResM_PhylaW = res_table(diagdds_ResM_Phyla,physeq_phylaM_W)
+res_ResM_PhylaW = subset(res_ResM_PhylaW, log2FoldChange != "NA")
+
+res_SelectM_PhylaW = res_table(diagdds_SelectM_Phyla,physeq_phylaM_W)
+res_SelectM_PhylaW = subset(res_SelectM_PhylaW, log2FoldChange != "NA")
+
+#Making Tables for significant taxa only:
+sigtab_SelectM_PhylaW = res_SelectM_PhylaW[which(res_SelectM_PhylaW$padj < 0.05),]
+sigtab_ResM_PhylaW = res_ResM_PhylaW[which(res_ResM_PhylaW$padj < 0.05),]
+
+
+```
+
+##Positive/Negative Selection In Winterfell
+```{r}
+library(RColorBrewer)
+
+# Ordering factor by logfoldchange in numerical order
+res_SelectM_PhylaW = subset(res_SelectM_PhylaW, Order != "NA" & log2FoldChange != "NA" & padj != "NA")
+TaxOrder = res_SelectM_PhylaW %>%
+  group_by(Phylum)%>%
+  summarize(Total=n()) %>%
+  arrange(-Total)
+TaxOrder = TaxOrder$Phylum
+res_SelectM_PhylaW$Phylum = ordered(res_SelectM_PhylaW$Phylum, levels=TaxOrder)
+
+nb.cols <- 41 #Number of colors to use for graph for RColorBrewer
+palette_colors = colorRampPalette(brewer.pal(8,"Set2"))(nb.cols)
+
+# Making the plot
+W_SelectM_Plot = ggplot(res_SelectM_PhylaW,aes(x=Phylum, y=log2FoldChange, alpha= if_else(padj < 0.05,20,5), fill=Phylum))+
+  geom_jitter(shape=21, stroke=1, aes(size=baseMean), width=0.2)+
+  scale_size(guide=FALSE)+
+  scale_fill_manual(values = palette_colors)+
+  theme_bw()+
+  theme(axis.text.x = element_text(angle=45, hjust=1, size=10))+
+  theme(axis.title.y = element_text(size=10))+
+  theme(legend.position="none")+
+  geom_hline(yintercept=0)+
+  ylab(expression(Response~to~Plant~Growth(log[2]-fold~change)))+
+  theme(axis.text.x = element_text(face="italic"),
+             legend.text = element_text(face="italic"),
+             axis.title.x = element_blank())
+W_SelectM_Plot
+```
+##Response and Negative Selection
+
+```{r}
+# Ordering factor by logfoldchange in numerical order
+res_ResH_N = subset(res_ResH_N, Order != "NA" & log2FoldChange != "NA" & padj != "NA")
+TaxOrder = res_ResH_N %>%
+  group_by(Order)%>%
+  summarize(Total=n()) %>%
+  arrange(-Total)
+TaxOrder = TaxOrder$Order[1:69]
+res_ResH_N$Order = ordered(res_ResH_N$Order, levels=TaxOrder)
+
+nb.cols <- 69 #Number of colors to use for graph for RColorBrewer
+palette_colors = colorRampPalette(brewer.pal(8,"Set2"))(nb.cols)
+
+# Making the plot
+H_ResN_Plot = ggplot(res_ResH_N,aes(x=Order, y=log2FoldChange, alpha= if_else(padj < 0.05,20,5), fill=Order))+
+  geom_jitter(shape=21, stroke=1, aes(size=baseMean), width=0.2)+
+  scale_size(guide=FALSE)+
+  scale_fill_manual(values = palette_colors)+
+  theme_bw()+
+  theme(axis.text.x = element_text(angle=45, hjust=1, size=10))+
+  theme(axis.title.y = element_text(size=10))+
+  theme(legend.position="none")+
+  geom_hline(yintercept=0)+
+  ylab(expression(Response~to~Plant~Growth(log[2]-fold~change)))+
+  theme(axis.text.x = element_text(face="italic"),
+             legend.text = element_text(face="italic"),
+             axis.title.x = element_blank())
+H_ResN_Plot
+```
+
+```{r}
+library(Vennerable)
+
+sigtab_ResH_P1 = subset(sigtab_ResH_P, log2FoldChange > 0)
+sigtab_ResH_N1 = subset(sigtab_ResH_N, log2FoldChange > 0)
+
+
+#generate a list of significant ASVs that are were enriched
+my_list <- list(sigtab_ResH_P1$Family,sigtab_ResH_N$Family)
+names(my_list) = c("Positive","Negative")
+Vstem <- Venn(my_list)
+plot(Vstem, doWeights = FALSE)
+```
+
+```{r}
+Vstem@IntersectionSets
+
+```
+1] "Caulobacteraceae"   "Longimicrobiaceae"  "Sphingomonadaceae" 
+[4] "Micromonosporaceae"
+
+are our microbial families that we can say may have had a positive impact on plant growth and were selected for from our greenhouse experiment.
+
+
+```{r}
+sigtab_ResH_P1 = subset(sigtab_ResH_P, log2FoldChange < 0)
+sigtab_ResH_N1 = subset(sigtab_ResH_N, log2FoldChange < 0)
+
+
+#generate a list of significant ASVs that are were enriched
+my_list <- list(sigtab_ResH_P1$Family,sigtab_ResH_N$Family)
+names(my_list) = c("Positive","Negative")
+Vstem <- Venn(my_list)
+plot(Vstem, doWeights = FALSE)
+
+```
+
+```{r}
+Vstem@IntersectionSets
+
+```
+"0319-6G20"         "Sphingomonadaceae" "Devosiaceae"      
+"Paenibacillaceae"  "Dojkabacteria"     "Oxalobacteraceae" 
+"Comamonadaceae"    "Saccharimonadales" "Nitrosomonadaceae"
+"Rhizobiaceae"      "Flavobacteriaceae" "Planococcaceae"   
+"Nocardioidaceae"   "Microbacteriaceae" "Xanthomonadaceae" 
+
+Depletion of these taxa due to our Selection led to worse plant outcomes indicated by our plant response phenotype in Hancock soils. 
+
+
+***
+##Selection
+```{r}
+# Ordering factor by logfoldchange in numerical order
+res_H_ASV1 = subset(res_H_ASV1, Order != "NA" & log2FoldChange != "NA" & padj != "NA")
+TaxOrder = res_H_ASV1 %>%
+  group_by(Order)%>%
+  summarize(Total=n()) %>%
+  arrange(-Total)
+TaxOrder = TaxOrder$Order[1:69]
+res_H_ASV1$Order = ordered(res_H_ASV1$Order, levels=TaxOrder)
+
+nb.cols <- 69 #Number of colors to use for graph for RColorBrewer
+palette_colors = colorRampPalette(brewer.pal(8,"Set2"))(nb.cols)
+
+# Making the plot
+H_Select_ASV = ggplot(res_H_ASV1,aes(x=Order, y=log2FoldChange, alpha= if_else(padj < 0.05,20,5), fill=Order))+
+  geom_jitter(shape=21, stroke=1, aes(size=baseMean), width=0.2)+
+  scale_size(guide=FALSE)+
+  scale_fill_manual(values = palette_colors)+
+  theme_bw()+
+  theme(axis.text.x = element_text(angle=45, hjust=1, size=10))+
+  theme(axis.title.y = element_text(size=10))+
+  theme(legend.position="none")+
+  geom_hline(yintercept=0)+
+  ylab(expression(Response~to~Plant~Growth(log[2]-fold~change)))+
+  theme(axis.text.x = element_text(face="italic"),
+             legend.text = element_text(face="italic"),
+             axis.title.x = element_blank())
+H_Select_ASV
+```
+Selection and Response are linked sooo we see the sample results....
+

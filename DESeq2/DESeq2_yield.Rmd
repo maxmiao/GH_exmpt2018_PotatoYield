@@ -1,0 +1,929 @@
+---
+title: "DESeq2_yield_unfiltered"
+output: html_notebook
+---
+
+Goal of Differential Analysis: 
+
+1) Examine differential abundance of microbial communities among Positive vs Negative selected lines. 
+
+2) Examine differential abundance of microbial communities among positive vs negative plant responsive samples. 
+
+3) What taxa are overlapping between (1) and (2)?
+
+
+```{r}
+library(phyloseq)
+library(tidyverse)
+library(vegan)
+library(ggplot2)
+library(lme4)
+library(lmerTest)
+library(emmeans)
+library(DESeq2)
+```
+
+Quality Control steps performed in DESeq2_Clade.Rmd and saved as "ps1.RDS"
+```{r}
+physeq_trimmed = readRDS(file = "ps_merged.RDS")
+ps1 = readRDS("ps1.RDS")
+#physeq_glom <- tax_glom(physeq_trimmed, taxrank = "Genus", NArm = F)
+# Filter out taxa found in less than 10% of samples
+
+#physeq_trimmed = physeq_filter_taxa
+#physeq_trimmed
+```
+After filtering: we removed taxa not seen more than 1 times in at least 10% of the samples. This protects against an OTU with small mean & trivially large C.V. We only end up with 532 Features... 
+
+
+**Functions to be used:**
+
+```{r}
+#Function 1:
+geomMeans_DESeq2_Res = function(ps_object){
+diagdds_clade= phyloseq_to_deseq2(ps_object, ~ Response)
+
+gm_mean = function(x, na.rm=TRUE){
+  exp(sum(log(x[x > 0]), na.rm=na.rm) / length(x))
+}
+
+geoMeans = apply(counts(diagdds_clade), 1, gm_mean)
+diagdds = estimateSizeFactors(diagdds_clade, geoMeans = geoMeans)
+
+diagdds_clade = DESeq(diagdds, fitType="local")
+return(diagdds_clade)
+}
+
+geomMeans_DESeq2_ResT = function(ps_object){
+diagdds_clade= phyloseq_to_deseq2(ps_object, ~ Response*Iteration)
+
+gm_mean = function(x, na.rm=TRUE){
+  exp(sum(log(x[x > 0]), na.rm=na.rm) / length(x))
+}
+
+geoMeans = apply(counts(diagdds_clade), 1, gm_mean)
+diagdds = estimateSizeFactors(diagdds_clade, geoMeans = geoMeans)
+
+diagdds_clade = DESeq(diagdds, fitType="local")
+return(diagdds_clade)
+}
+
+
+
+#Function 2:
+# Calculate size factors using modified geometric means that can handle zeros and estimate normalization factors
+
+geomMeans_DESeq2_Select = function(ps_object){
+diagdds_clade= phyloseq_to_deseq2(ps_object, ~ Selection.x * Iteration)
+
+gm_mean = function(x, na.rm=TRUE){
+  exp(sum(log(x[x > 0]), na.rm=na.rm) / length(x))
+}
+
+geoMeans = apply(counts(diagdds_clade), 1, gm_mean)
+diagdds = estimateSizeFactors(diagdds_clade, geoMeans = geoMeans)
+
+diagdds_clade = DESeq(diagdds, fitType="local")
+return(diagdds_clade)
+}
+
+#Function 3: significant taxa < alpha
+DESeq_table = function(DESeq2_ds,ps_object){
+res = results(DESeq2_ds, cooksCutoff = FALSE)
+alpha = 0.05
+sigtab = res[which(res$padj < alpha), ]
+sigtab = cbind(as(sigtab, "data.frame"), as(tax_table(ps_object)[rownames(sigtab), ], "matrix"))
+return(sigtab)
+}
+
+#Function 4: All results
+
+res_table = function(diagdds_clade,ps_object){
+  res = results(diagdds_clade, cooksCutoff = FALSE)
+  res_A_Phyla = cbind(as(res, "data.frame"), as(tax_table(ps_object)[rownames(res), ], "matrix"))
+}
+
+```
+
+
+##Aim 1: Quantitative relative analysis of community structure to response outcome 
+
+
+###At Genus level:
+```{r}
+#Andigenum and Response:
+physeq_Andigenum = subset_samples(ps1, Clade == 'A' & Response != "NA" & Soil_inoculation != "Sterile")
+physeq_Andigenum <- tax_glom(physeq_Andigenum, taxrank = "Genus", NArm = F)
+physeq_Andigenum = subset_samples(physeq_Andigenum, taxa_sums(physeq_Andigenum) > 0)
+physeq_Andigenum = subset_samples(physeq_Andigenum, sample_sums(physeq_Andigenum) > 0)
+diagdds_ResA_ASV = geomMeans_DESeq2_Res(physeq_Andigenum)
+res_A_ASV= res_table(diagdds_ResA_ASV,physeq_Andigenum)
+sigtab_A_ASV = res_A_ASV[which(res_A_ASV$padj < 0.05), ]
+#write.csv(sigtab_A_ASV,"sigtab_A_ASV.csv")
+
+
+#Troubleshooting DESeq2 data:
+#OTU_TABLE_Andigenum = physeq_Andigenum@otu_table
+#OTU_TABLE_Andigenum= as.data.frame(OTU_TABLE_Andigenum)
+#write.csv(OTU_TABLE_Andigenum,"OTU_Andigenum.csv")
+
+
+#Chiletanum and Response:
+physeq_Chiletanum = subset_samples(ps1, Clade == 'C' & Response != "NA" & Soil_inoculation != "Sterile")
+physeq_Chiletanum <- tax_glom(physeq_Chiletanum, taxrank = "Genus", NArm = T)
+physeq_Chiletanum = subset_samples(physeq_Chiletanum, taxa_sums(physeq_Chiletanum) > 0)
+physeq_Chiletanum = subset_samples(physeq_Chiletanum, sample_sums(physeq_Chiletanum) > 0)
+#physeq_Chiletanum = filter_taxa(physeq_Chiletanum, function(x) sum(x > 0) > (0.05*length(x)), TRUE)
+diagdds_ResC_ASV = geomMeans_DESeq2_Res(physeq_Chiletanum)
+res_C_ASV= res_table(diagdds_ResC_ASV,physeq_Chiletanum)
+sigtab_C_ASV = res_C_ASV[which(res_C_ASV$padj < 0.05), ]
+#write.csv(sigtab_C_ASV,"sigtab_C_ASV.csv")
+
+#Modern and Response:
+physeq_Modern = subset_samples(ps1, Clade == 'M' & Response != "NA" & Soil_inoculation != "Sterile")
+physeq_Modern <- tax_glom(physeq_Modern, taxrank = "Genus", NArm = F)
+physeq_Modern = subset_samples(physeq_Modern, taxa_sums(physeq_Modern) > 0)
+physeq_Modern = subset_samples(physeq_Modern, sample_sums(physeq_Modern) > 0)
+#physeq_Modern = filter_taxa(physeq_Modern, function(x) sum(x > 0) > (0.05*length(x)), TRUE)
+diagdds_ResM_ASV = geomMeans_DESeq2_Res(physeq_Modern)
+res_M_ASV= res_table(diagdds_ResM_ASV,physeq_Modern)
+sigtab_M_ASV = res_M_ASV[which(res_M_ASV$padj < 0.05), ]
+#write.csv(sigtab_M_ASV,"sigtab_M_ASV.csv")
+
+
+```
+
+
+**FIGURE 6 Ch 3 paper**
+```{r}
+#installation guide here: https://github.com/js229/Vennerable
+library(Vennerable)
+
+restab_A_ResP = subset(res_A_ASV, log2FoldChange > 0, Family != "NA")
+restab_C_ResP = subset(res_C_ASV, log2FoldChange > 0, Family != "NA")
+restab_M_ResP = subset(res_M_ASV, log2FoldChange > 0, Family != "NA")
+
+
+#generate a list of significant ASVs that are were enriched
+my_list <- list(restab_A_ResP$Family,restab_C_ResP$Family,restab_M_ResP$Family)
+names(my_list) = c("Andigenum","Chiletanum","Modern")
+Vstem <- Venn(my_list)
+plot(Vstem, doWeights = FALSE)
+
+
+```
+
+```{r}
+Vstem@IntersectionSets
+```
+
+```{r}
+
+restab_A_ResN = subset(res_A_ASV, log2FoldChange < 0, Family != "NA")
+restab_C_ResN = subset(res_C_ASV, log2FoldChange < 0, Family != "NA")
+restab_M_ResN = subset(res_M_ASV, log2FoldChange < 0, Family != "NA")
+
+
+my_list <- list(restab_A_ResN$Phylum,restab_C_ResN$Phylum,restab_M_ResN$Phylum)
+names(my_list) = c("Andigenum","Chiletanum","Modern")
+Vstem <- Venn(my_list)
+plot(Vstem, doWeights = FALSE)
+
+Vstem@IntersectionSets
+
+```
+
+
+#Negatively Selected:
+```{r}
+#installation guide here: https://github.com/js229/Vennerable
+library(Vennerable)
+
+res_A_ASV_ResN = subset(res_A_ASV, log2FoldChange < 0)
+res_C_ASV_ResN = subset(res_C_ASV, log2FoldChange < 0)
+res_M_ASV_ResN = subset(res_M_ASV, log2FoldChange < 0)
+
+
+#generate a list of significant ASVs that are were enriched
+my_list <- list(res_A_ASV_ResN$Family,sigtab_C_ResN$Family,sigtab_M_ResN$Family)
+names(my_list) = c("Andigenum","Chiletanum","Modern")
+Vstem <- Venn(my_list)
+plot(Vstem, doWeights = FALSE)
+
+Vstem@IntersectionSets
+
+```
+```{r}
+my_list <- list(sigtab_A_ResN$Phylum,sigtab_C_ResN$Phylum,sigtab_M_ResN$Phylum)
+names(my_list) = c("Andigenum","Chiletanum","Modern")
+Vstem <- Venn(my_list)
+plot(Vstem, doWeights = FALSE)
+
+Vstem@IntersectionSets
+
+```
+###Plotting differential abudance of ASVs catagorized as Families and Phyla:
+
+**USE FOR FIGURE 5A**
+```{r}
+library(RColorBrewer)
+
+TaxOrder = res_A_ASV %>%
+  group_by(Phylum)%>%
+  summarize(Total=n()) %>%
+  arrange(-Total)
+TaxOrder = TaxOrder$Phylum
+res_A_ASV$Phylum = ordered(res_A_ASV$Phylum, levels=TaxOrder)
+
+nb.cols <- 41 #Number of colors to use for graph for RColorBrewer
+palette_colors = colorRampPalette(brewer.pal(15,"Set2"))(nb.cols)
+
+A = ggplot(res_A_ASV,aes(x=Phylum, y=log2FoldChange, alpha= if_else(padj < 0.05,20,5), fill=Phylum))+
+  geom_jitter(shape=21, stroke=1, aes(size=baseMean), width=0.2)+
+  scale_size(guide=FALSE)+
+  scale_fill_manual(values = palette_colors)+
+  theme_bw()+
+  theme(axis.text.x = element_text(angle=45, hjust=1, size=5))+
+  theme(axis.title.y = element_text(size=10))+
+  theme(legend.position="none")+
+  geom_hline(yintercept=0)+
+  ylab(expression(Response~to~Plant~Growth(log[2]-fold~change)))+
+  theme(axis.text.x = element_text(face="italic"),
+             legend.text = element_text(face="italic"),
+             axis.title.x = element_blank())
+A
+
+```
+
+**USE FOR FIGURE 5B**
+
+```{r}
+TaxOrder = res_C_ASV %>%
+  group_by(Phylum)%>%
+  summarize(Total=n()) %>%
+  arrange(-Total)
+TaxOrder = TaxOrder$Phylum
+res_C_ASV$Phylum = ordered(res_C_ASV$Phylum, levels=TaxOrder)
+
+nb.cols <- 41 #Number of colors to use for graph for RColorBrewer
+palette_colors = colorRampPalette(brewer.pal(15,"Set2"))(nb.cols)
+
+C_ASV_Plot = ggplot(res_C_ASV,aes(x=Phylum, y=log2FoldChange, alpha= if_else(padj < 0.05,20,5), fill=Phylum))+
+  geom_jitter(shape=21, stroke=1, aes(size=baseMean), width=0.2)+
+  scale_size(guide=FALSE)+
+  scale_fill_manual(values = palette_colors)+
+  theme_bw()+
+  theme(axis.text.x = element_text(angle=45, hjust=1, size=5))+
+  theme(axis.title.y = element_text(size=10))+
+  theme(legend.position="none")+
+  geom_hline(yintercept=0)+
+  ylab(expression(Response~to~Plant~Growth(log[2]-fold~change)))+
+  theme(axis.text.x = element_text(face="italic"),
+             legend.text = element_text(face="italic"),
+             axis.title.x = element_blank())
+C_ASV_Plot
+```
+
+
+```{r}
+TaxOrder = res_M_ASV %>%
+  group_by(Phylum)%>%
+  summarize(Total=n()) %>%
+  arrange(-Total)
+TaxOrder = TaxOrder$Phylum
+res_M_ASV$Phylum = ordered(res_M_ASV$Phylum, levels=TaxOrder)
+
+nb.cols <- 41 #Number of colors to use for graph for RColorBrewer
+palette_colors = colorRampPalette(brewer.pal(15,"Set2"))(nb.cols)
+
+M_ASV_Plot = ggplot(res_M_ASV,aes(x=Phylum, y=log2FoldChange, alpha= if_else(padj < 0.05,20,5), fill=Phylum))+
+  geom_jitter(shape=21, stroke=1, aes(size=baseMean), width=0.2)+
+  scale_size(guide=FALSE)+
+  scale_fill_manual(values = palette_colors)+
+  theme_bw()+
+  theme(axis.text.x = element_text(angle=45, hjust=1, size=5))+
+  theme(axis.title.y = element_text(size=10))+
+  theme(legend.position="none")+
+  geom_hline(yintercept=0)+
+  ylab(expression(Response~to~Plant~Growth(log[2]-fold~change)))+
+  theme(axis.text.x = element_text(face="italic"),
+             legend.text = element_text(face="italic"),
+             axis.title.x = element_blank())
+M_ASV_Plot
+```
+
+
+```{r}
+#Venn Diagram
+sigtab_A_ResP = subset(sigtab_A_ASV, log2FoldChange > 0)
+sigtab_C_ResP = subset(sigtab_C_ASV, log2FoldChange > 0)
+sigtab_M_ResP = subset(sigtab_M_ASV, log2FoldChange > 0)
+
+
+#generate a list of significant ASVs that are were enriched
+my_list <- list(sigtab_A_ResP$Genus,sigtab_C_ResP$Genus,sigtab_M_ResP$Genus)
+names(my_list) = c("Andigenum","Chiletanum","Modern")
+Vstem <- Venn(my_list)
+plot(Vstem, doWeights = FALSE)
+```
+
+
+
+###ASV level at iteration 5:
+
+
+```{r ASV_i5}
+#Andigenum and Microbial Response:
+physeq_Andigenum = subset_samples(physeq_trimmed, Clade == 'A' & Response != "NA" & Soil_inoculation != "Sterile" & Iteration == 5)
+physeq_Andigenum = filter_taxa(physeq_Andigenum, function(x) sum(x > 0) > (0.1*length(x)), TRUE)
+diagdds_ResA_ASV = geomMeans_DESeq2_Res(physeq_Andigenum)
+res_A_ASV_i5= res_table(diagdds_ResA_ASV,physeq_Andigenum)
+sigtab_A_ASV_i5 = res_A_ASV[which(res_A_ASV$padj < 0.05), ]
+
+
+#Chiletanum and Microbial Response:
+physeq_Chiletanum = subset_samples(physeq_trimmed, Clade == 'C' & Response != "NA" & Soil_inoculation != "Sterile" & Iteration == 5)
+physeq_Chiletanum = filter_taxa(physeq_Chiletanum, function(x) sum(x > 0) > (0.1*length(x)), TRUE)
+diagdds_ResC_ASV = geomMeans_DESeq2_Res(physeq_Chiletanum)
+res_C_ASV_i5= res_table(diagdds_ResC_ASV,physeq_Chiletanum)
+sigtab_C_ASV_i5 = res_C_ASV[which(res_C_ASV$padj < 0.05), ]
+  
+#Modern and Microbial Response:
+physeq_Modern = subset_samples(physeq_trimmed, Clade == 'M' & Response != "NA" & Soil_inoculation != "Sterile" & Iteration == 5)
+physeq_Andigenum = filter_taxa(physeq_Modern, function(x) sum(x > 0) > (0.1*length(x)), TRUE)
+diagdds_ResM_ASV = geomMeans_DESeq2_Res(physeq_Modern)
+res_M_ASV_i5= res_table(diagdds_ResM_ASV,physeq_Modern)
+sigtab_M_ASV_i5 = res_M_ASV[which(res_M_ASV$padj < 0.05), ]
+
+```
+
+```{r}
+#Venn Diagram
+sigtab_A_ResP_i5 = subset(sigtab_A_ASV_i5, log2FoldChange > 0)
+sigtab_C_ResP_i5 = subset(sigtab_C_ASV_i5, log2FoldChange > 0)
+sigtab_M_ResP_i5 = subset(sigtab_M_ASV_i5, log2FoldChange > 0)
+
+
+#generate a list of significant ASVs that are were enriched
+my_list <- list(sigtab_A_ResP_i5$Genus,sigtab_C_ResP_i5$Genus,sigtab_M_ResP_i5$Genus)
+names(my_list) = c("Andigenum","Chiletanum","Modern")
+Vstem <- Venn(my_list)
+plot(Vstem, doWeights = FALSE)
+
+my_list <- list(sigtab_A_ResP_i5$Phylum,sigtab_C_ResP_i5$Phylum,sigtab_M_ResP_i5$Phylum)
+names(my_list) = c("Andigenum","Chiletanum","Modern")
+Vstem <- Venn(my_list)
+plot(Vstem, doWeights = FALSE)
+```
+
+
+```{r}
+#Venn Diagram
+sigtab_A_ResN_i5 = subset(sigtab_A_ASV_i5, log2FoldChange < 0)
+sigtab_C_ResN_i5 = subset(sigtab_C_ASV_i5, log2FoldChange < 0)
+sigtab_M_ResN_i5 = subset(sigtab_M_ASV_i5, log2FoldChange < 0)
+
+
+#generate a list of significant ASVs that are were enriched
+my_list <- list(sigtab_A_ResN_i5$Family,sigtab_A_ResN_i5$Family,sigtab_A_ResN_i5$Family)
+names(my_list) = c("Andigenum","Chiletanum","Modern")
+Vstem <- Venn(my_list)
+plot(Vstem, doWeights = FALSE)
+
+my_list <- list(sigtab_A_ResN_i5$Phylum,sigtab_A_ResN_i5$Phylum,sigtab_A_ResN_i5$Phylum)
+names(my_list) = c("Andigenum","Chiletanum","Modern")
+Vstem <- Venn(my_list)
+plot(Vstem, doWeights = FALSE)
+```
+  
+
+### Microbial taxa at Phyla level 
+
+
+####Co-correlated with Plant response (Across all iterations):
+
+```{r}
+#Andigenum growth and Microbial Response:
+physeq_Andigenum = subset_samples(ps1, Clade == 'A' & Response != "NA" & Soil_inoculation != "Sterile")
+physeq_FamA = tax_glom(physeq_Andigenum,taxrank=rank_names(physeq_Andigenum)[5])
+diagdds_ResA_Fam = geomMeans_DESeq2_Res(physeq_FamA)
+sigtab_ResA_Fam = DESeq_table(diagdds_ResA_Fam,physeq_FamA)
+res_ResA_Fam = res_table(diagdds_ResA_Fam,physeq_FamA)
+
+#Chiletanum growth and Microbial Response
+physeq_Chiletanum = subset_samples(ps1, Clade == 'C' & Response != "NA" & Soil_inoculation != "Sterile")
+physeq_FamC = tax_glom(physeq_Chiletanum,taxrank=rank_names(physeq_Chiletanum)[5])
+#physeq_FamC = filter_taxa(physeq_FamC, function(x) sum(x > 0) > (0.1*length(x)), TRUE)
+diagdds_ResC_Fam = geomMeans_DESeq2_Res(physeq_FamC)
+res_ResC_Fam = res_table(diagdds_ResC_Fam,physeq_FamC)
+sigtab_ResC_Fam = res_ResC_Fam[which(res_ResC_Fam$padj < 0.05), ]
+
+
+#Modern growth and Microbial Response
+physeq_Modern = subset_samples(ps1, Clade == 'M' & Response != "NA" & Soil_inoculation != "Sterile")
+physeq_FamM = tax_glom(physeq_Modern,taxrank=rank_names(physeq_Modern)[5])
+#physeq_FamM  = filter_taxa(physeq_FamM , function(x) sum(x > 0) > (0.1*length(x)), TRUE)
+diagdds_ResM_Fam = geomMeans_DESeq2_Res(physeq_FamM)
+res_ResM_Fam = res_table(diagdds_ResM_Fam,physeq_FamM)
+sigtab_ResM_Fam = res_ResM_Fam[which(res_ResM_Fam$padj < 0.05), ]
+#write.csv(sigtab_ResM_Fam,"sigtab_ResM_Fam.csv")
+
+```
+
+
+####co-correlated with plant response (iteration 5 only)** 
+```{r}
+#Andigenum and Microbial Response:
+physeq_Andigenum = subset_samples(physeq_trimmed, Clade == 'A' & Response != "NA" & Soil_inoculation != "Sterile" & Iteration == 5)
+physeq_FamA = tax_glom(physeq_Andigenum,taxrank=rank_names(physeq_Andigenum)[5])
+physeq_FamA = subset_taxa(physeq_FamA, Phylum != "NA")
+physeq_FamA = subset_samples(physeq_FamA, sample_sums(physeq_FamA) != 0)
+diagdds_ResA_Fam = geomMeans_DESeq2_Res(physeq_FamA)
+res_ResA_Fam = res_table(diagdds_ResA_Fam,physeq_FamA)
+res_ResA_Fam_i5 = subset(res_ResA_Fam, log2FoldChange != "NA")
+sigtab_ResA_Fam_i5 = res_ResA_Fam[which(res_ResA_Fam$padj < 0.05), ]
+
+
+#Chiletanum and Microbial Response:
+physeq_Chiletanum = subset_samples(physeq_trimmed, Clade == 'C' & Response != "NA" & Soil_inoculation != "Sterile" & Iteration == 5)
+physeq_FamC = tax_glom(physeq_Chiletanum,taxrank=rank_names(physeq_Chiletanum)[5])
+physeq_FamC = subset_taxa(physeq_FamC, Phylum != "NA")
+physeq_FamC = subset_samples(physeq_FamC, sample_sums(physeq_FamC) != 0)
+diagdds_ResC_Fam = geomMeans_DESeq2_Res(physeq_FamC)
+res_ResC_Fam = res_table(diagdds_ResC_Fam,physeq_FamC)
+res_ResC_Fam_i5 = subset(res_ResC_Fam, log2FoldChange != "NA")
+sigtab_ResC_Fam_i5 = res_ResC_Fam[which(res_ResC_Fam$padj < 0.05), ]
+  
+#Modern and Microbial Response:
+physeq_Modern = subset_samples(physeq_trimmed, Clade == 'M' & Response != "NA" & Soil_inoculation != "Sterile" & Iteration == 5)
+physeq_FamM = tax_glom(physeq_Modern,taxrank=rank_names(physeq_Modern)[5])
+physeq_FamM = subset_taxa(physeq_FamM, Family != "NA")
+physeq_FamM = subset_samples(physeq_FamM, sample_sums(physeq_FamM) != 0)
+diagdds_ResM_Fam = geomMeans_DESeq2_Res(physeq_FamM)
+res_ResM_Fam = res_table(diagdds_ResM_Fam,physeq_FamM)
+res_ResM_Fam_i5 = subset(res_ResM_Fam, log2FoldChange != "NA")
+sigtab_ResM_Fam_i5 = res_ResM_Fam[which(res_ResM_Fam$padj < 0.05), ]
+
+```
+
+
+```{r}
+sigtab_ResA_FamP = subset(sigtab_ResA_Fam_i5, log2FoldChange > 0)
+sigtab_ResC_FamP = subset(sigtab_ResC_Fam_i5, log2FoldChange > 0)
+sigtab_ResM_FamP = subset(sigtab_ResM_Fam_i5, log2FoldChange > 0)
+
+my_list <- list(sigtab_ResC_FamP$Family,sigtab_ResC_FamP$Family,sigtab_ResM_FamP$Family)
+names(my_list) = c("Andigenum","Chiletanum","Modern")
+Vstem <- Venn(my_list)
+plot(Vstem, doWeights = FALSE)
+
+Vstem@IntersectionSets
+```
+
+
+Results: **Iteration 5 only**
+
+Andigenum: Saccharimonadales (Positive), Corynebacteriaceae (negative), Cytophagaceae (Positive), Crocinitomicaceae (Positive), Microscillaceae (Positive), Pseudomonadaceae (negative), Propionibacteriaceae (negative), Haliangiaceae (Positive), Flavobacteriaceae (Negative)
+
+Chiletanum: None
+
+Modern: Cyclobacteriaceae (Positive), PeM15 (Actinobacteria), Puniceispirillales (Positive), Spirosomaceae (Positive)
+
+
+
+```{r}
+TaxOrder = res_ResA_Fam %>%
+  group_by(Family)%>%
+  summarize(Total=n()) %>%
+  arrange(-Total)
+TaxOrder = TaxOrder$Family
+res_ResA_Fam$Family = ordered(res_ResA_Fam$Family, levels=TaxOrder)
+
+nb.cols <- 109 #Number of colors to use for graph for RColorBrewer
+palette_colors = colorRampPalette(brewer.pal(8,"Set2"))(nb.cols)
+
+A_Family_Plot = ggplot(res_ResA_Fam,aes(x=Family, y=log2FoldChange, alpha= if_else(padj < 0.05,20,5), fill=Phylum))+
+  geom_jitter(shape=21, stroke=1, aes(size=baseMean), width=0.2)+
+  scale_size(guide=FALSE)+
+  scale_fill_manual(values = palette_colors)+
+  theme_bw()+
+  theme(axis.text.x = element_text(angle=45, hjust=1, size=5))+
+  theme(axis.title.y = element_text(size=10))+
+  theme(legend.position="none")+
+  geom_hline(yintercept=0)+
+  ylab(expression(Response~to~Plant~Growth(log[2]-fold~change)))+
+  theme(axis.text.x = element_text(face="italic"),
+             legend.text = element_text(face="italic"),
+             axis.title.x = element_blank())
+A_Family_Plot
+
+```
+
+```{r}
+TaxOrder = res_ResC_Fam %>%
+  group_by(Phylum)%>%
+  summarize(Total=n()) %>%
+  arrange(-Total)
+TaxOrder = TaxOrder$Phylum
+res_ResC_Fam$Phylum = ordered(res_ResC_Fam$Phylum, levels=TaxOrder)
+
+nb.cols <- 41 #Number of colors to use for graph for RColorBrewer
+palette_colors = colorRampPalette(brewer.pal(8,"Set2"))(nb.cols)
+
+C_Family_Plot = ggplot(res_ResC_Fam,aes(x=Phylum, y=log2FoldChange, alpha= if_else(padj < 0.05,20,5), fill=Phylum))+
+  geom_jitter(shape=21, stroke=1, aes(size=baseMean), width=0.2)+
+  scale_size(guide=FALSE)+
+  scale_fill_manual(values = palette_colors)+
+  theme_bw()+
+  theme(axis.text.x = element_text(angle=45, hjust=1, size=5))+
+  theme(axis.title.y = element_text(size=10))+
+  theme(legend.position="none")+
+  geom_hline(yintercept=0)+
+  ylab(expression(Response~to~Plant~Growth(log[2]-fold~change)))+
+  theme(axis.text.x = element_text(face="italic"),
+             legend.text = element_text(face="italic"),
+             axis.title.x = element_blank())
+C_Family_Plot
+```
+
+
+```{r}
+TaxOrder = res_ResM_Fam %>%
+  group_by(Phylum)%>%
+  summarize(Total=n()) %>%
+  arrange(-Total)
+TaxOrder = TaxOrder$Phylum
+res_ResM_Fam$Phylum = ordered(res_ResM_Fam$Phylum, levels=TaxOrder)
+
+nb.cols <- 41 #Number of colors to use for graph for RColorBrewer
+palette_colors = colorRampPalette(brewer.pal(8,"Set2"))(nb.cols)
+
+M_Family_Plot = ggplot(res_ResM_Fam,aes(x=Phylum, y=log2FoldChange, alpha= if_else(padj < 0.05,20,5), fill=Phylum))+
+  geom_jitter(shape=21, stroke=1, aes(size=baseMean), width=0.2)+
+  scale_size(guide=FALSE)+
+  scale_fill_manual(values = palette_colors)+
+  theme_bw()+
+  theme(axis.text.x = element_text(angle=45, hjust=1, size=5))+
+  theme(axis.title.y = element_text(size=10))+
+  theme(legend.position="none")+
+  geom_hline(yintercept=0)+
+  ylab(expression(Response~to~Plant~Growth(log[2]-fold~change)))+
+  theme(axis.text.x = element_text(face="italic"),
+             legend.text = element_text(face="italic"),
+             axis.title.x = element_blank())
+M_Family_Plot
+```
+
+
+
+###At Phylum Level: 
+```{r}
+#Andigenum growth and Microbial Response:
+physeq_Andigenum = subset_samples(physeq_trimmed, Clade == 'A' & Response != "NA" & Soil_inoculation != "Sterile")
+physeq_phylaA = tax_glom(physeq_Andigenum,taxrank=rank_names(physeq_Andigenum)[2])
+physeq_phylaA = subset_taxa(physeq_phylaA, Phylum != "NA")
+physeq_phylaA = subset_samples(physeq_phylaA, sample_sums(physeq_phylaA) != 0)
+diagdds_ResA_Phyla = geomMeans_DESeq2_Res(physeq_phylaA)
+sigtab_ResA_Phyla = DESeq_table(diagdds_ResA_Phyla,physeq_phylaA)
+res_ResA_Phyla = res_table(diagdds_ResA_Phyla,physeq_phylaA)
+sigtab_ResA_Phyla = res_ResA_Phyla[which(res_ResA_Phyla$padj < 0.05), ]
+#write.csv(sigtab_ResA_Phyla,"sigtab_ResA_Phyla.csv")
+
+#Chiletanum growth and Microbial Response
+physeq_Chiletanum = subset_samples(physeq_trimmed, Clade == 'C' & Response != "NA" & Soil_inoculation != "Sterile")
+physeq_phylaC = tax_glom(physeq_Chiletanum,taxrank=rank_names(physeq_Chiletanum)[2])
+physeq_phylaC = subset_taxa(physeq_phylaC, Phylum != "NA")
+physeq_phylaC = subset_samples(physeq_phylaC, sample_sums(physeq_phylaC) != 0)
+diagdds_ResC_Phyla = geomMeans_DESeq2_Res(physeq_phylaC)
+res_ResC_Phyla = res_table(diagdds_ResC_Phyla,physeq_phylaC)
+sigtab_ResC_Phyla = res_ResC_Phyla[which(res_ResC_Phyla$padj < 0.05), ]
+
+
+#Modern growth and Microbial Response
+physeq_Modern = subset_samples(physeq_trimmed, Clade == 'M' & Response != "NA" & Soil_inoculation != "Sterile")
+physeq_phylaM = tax_glom(physeq_Modern,taxrank=rank_names(physeq_Modern)[2])
+physeq_phylaM = subset_taxa(physeq_phylaM, Phylum != "NA")
+physeq_phylaM = subset_samples(physeq_phylaM, sample_sums(physeq_phylaM) != 0)
+diagdds_ResM_Phyla = geomMeans_DESeq2_Res(physeq_phylaM)
+res_ResM_Phyla = res_table(diagdds_ResM_Phyla,physeq_phylaM)
+sigtab_ResM_Phyla = res_ResM_Phyla[which(res_ResM_Phyla$padj < 0.05), ]
+#write.csv(sigtab_ResM_Phyla,"sigtab_ResM_Phyla.csv")
+
+```
+
+
+####PLOTS for Phyla differences
+
+
+**Andigenum**
+```{r}
+library(RColorBrewer)
+
+TaxOrder = res_ResA_Phyla %>%
+  group_by(Phylum)%>%
+  summarize(Total=n()) %>%
+  arrange(-Total)
+TaxOrder = TaxOrder$Phylum
+res_ResA_Phyla$Phylum = ordered(res_ResA_Phyla$Phylum, levels=TaxOrder)
+
+nb.cols <- 41 #Number of colors to use for graph for RColorBrewer
+palette_colors = colorRampPalette(brewer.pal(8,"Set2"))(nb.cols)
+
+A_Phyla_Plot = ggplot(res_ResA_Phyla,aes(x=Phylum, y=log2FoldChange, alpha= if_else(padj < 0.05,20,5), fill=Phylum))+
+  geom_jitter(shape=21, stroke=1, aes(size=baseMean), width=0.2)+
+  scale_size(guide=FALSE)+
+  scale_fill_manual(values = palette_colors)+
+  theme_bw()+
+  theme(axis.text.x = element_text(angle=45, hjust=1, size=5))+
+  theme(axis.title.y = element_text(size=10))+
+  theme(legend.position="none")+
+  geom_hline(yintercept=0)+
+  ylab(expression(Response~to~Plant~Growth(log[2]-fold~change)))+
+  theme(axis.text.x = element_text(face="italic"),
+             legend.text = element_text(face="italic"),
+             axis.title.x = element_blank())
+A_Phyla_Plot
+```
+
+
+```{r}
+TaxOrder = res_ResC_Phyla %>%
+  group_by(Phylum)%>%
+  summarize(Total=n()) %>%
+  arrange(-Total)
+TaxOrder = TaxOrder$Phylum
+res_ResC_Phyla$Phylum = ordered(res_ResC_Phyla$Phylum, levels=TaxOrder)
+
+nb.cols <- 41 #Number of colors to use for graph for RColorBrewer
+palette_colors = colorRampPalette(brewer.pal(8,"Set2"))(nb.cols)
+
+C_Phyla_Plot = ggplot(res_ResC_Phyla,aes(x=Phylum, y=log2FoldChange, alpha= if_else(padj < 0.05,20,5), fill=Phylum))+
+  geom_jitter(shape=21, stroke=1, aes(size=baseMean), width=0.2)+
+  scale_size(guide=FALSE)+
+  scale_fill_manual(values = palette_colors)+
+  theme_bw()+
+  theme(axis.text.x = element_text(angle=45, hjust=1, size=5))+
+  theme(axis.title.y = element_text(size=10))+
+  theme(legend.position="none")+
+  geom_hline(yintercept=0)+
+  ylab(expression(Response~to~Plant~Growth(log[2]-fold~change)))+
+  theme(axis.text.x = element_text(face="italic"),
+             legend.text = element_text(face="italic"),
+             axis.title.x = element_blank())
+C_Phyla_Plot
+```
+
+
+
+```{r}
+TaxOrder = res_ResM_Phyla %>%
+  group_by(Phylum)%>%
+  summarize(Total=n()) %>%
+  arrange(-Total)
+TaxOrder = TaxOrder$Phylum
+res_ResM_Phyla$Phylum = ordered(res_ResM_Phyla$Phylum, levels=TaxOrder)
+
+nb.cols <- 41 #Number of colors to use for graph for RColorBrewer
+palette_colors = colorRampPalette(brewer.pal(8,"Set2"))(nb.cols)
+
+M_Phyla_Plot = ggplot(res_ResM_Phyla,aes(x=Phylum, y=log2FoldChange, alpha= if_else(padj < 0.05,20,5), fill=Phylum))+
+  geom_jitter(shape=21, stroke=1, aes(size=baseMean), width=0.2)+
+  scale_size(guide=FALSE)+
+  scale_fill_manual(values = palette_colors)+
+  theme_bw()+
+  theme(axis.text.x = element_text(angle=45, hjust=1, size=5))+
+  theme(axis.title.y = element_text(size=10))+
+  theme(legend.position="none")+
+  geom_hline(yintercept=0)+
+  ylab(expression(Response~to~Plant~Growth(log[2]-fold~change)))+
+  theme(axis.text.x = element_text(face="italic"),
+             legend.text = element_text(face="italic"),
+             axis.title.x = element_blank())
+M_Phyla_Plot
+```
+
+
+
+**Results**: for microbial phyla abundance and plant response across time:
+
+Andigenum: Patescibacteria, Dependentiae both are positive
+Chiletanum: None
+Modern: None
+
+###Microbial taxa (Phyla) differentially abundant and Plant response at iteration 5
+```{r}
+#Andigenum growth and Microbial Response:
+physeq_Andigenum = subset_samples(physeq_trimmed, Clade == 'A' & Response != "NA" & Soil_inoculation != "Sterile" & Iteration == 5)
+physeq_phylaA = tax_glom(physeq_Andigenum,taxrank=rank_names(physeq_Andigenum)[2])
+physeq_phylaA = subset_taxa(physeq_phylaA, Phylum != "NA")
+physeq_phylaA = subset_samples(physeq_phylaA, sample_sums(physeq_phylaA) != 0)
+diagdds_ResA_Phyla = geomMeans_DESeq2_Res(physeq_phylaA)
+sigtab_ResA_Phyla = DESeq_table(diagdds_ResA_Phyla,physeq_phylaA)
+res_ResA_Phyla = res_table(diagdds_ResA_Phyla,physeq_phylaA)
+
+#Chiletanum growth and Microbial Response
+physeq_Chiletanum = subset_samples(physeq_trimmed, Clade == 'C' & Response != "NA" & Soil_inoculation != "Sterile" & Iteration == 5)
+physeq_phylaC = tax_glom(physeq_Chiletanum,taxrank=rank_names(physeq_Chiletanum)[2])
+physeq_phylaC = subset_taxa(physeq_phylaC, Phylum != "NA")
+physeq_phylaC = subset_samples(physeq_phylaC, sample_sums(physeq_phylaC) != 0)
+diagdds_ResC_Phyla = geomMeans_DESeq2_Res(physeq_phylaC)
+res_ResC_Phyla = res_table(diagdds_ResC_Phyla,physeq_phylaC)
+sigtab_ResC_Phyla = res_ResC_Phyla[which(res_ResC_Phyla$padj < 0.05), ]
+
+
+#Modern growth and Microbial Response
+physeq_Modern = subset_samples(physeq_trimmed, Clade == 'M' & Response != "NA" & Soil_inoculation != "Sterile" & Iteration == 5)
+physeq_phylaM = tax_glom(physeq_Modern,taxrank=rank_names(physeq_Modern)[2])
+physeq_phylaM = subset_taxa(physeq_phylaM, Phylum != "NA")
+physeq_phylaM = subset_samples(physeq_phylaM, sample_sums(physeq_phylaM) != 0)
+diagdds_ResM_Phyla = geomMeans_DESeq2_Res(physeq_phylaM)
+res_ResM_Phyla = res_table(diagdds_ResM_Phyla,physeq_phylaM)
+sigtab_ResM_Phyla = res_ResM_Phyla[which(res_ResM_Phyla$padj < 0.05), ]
+
+```
+Results: 
+
+Similar to what was previously seen for Andigneum: Patescibacteria, Dependentiae
+
+Patescibacteria --> https://www.frontiersin.org/articles/10.3389/fmicb.2020.01948/full
+
+Discussion: Phyla potentially generalist that have a positive impact on plant growth...
+
+
+##Let's examine DESeq2 for Response*iteration for each Clade: 
+
+**Note** : Looking for consistent Deseq ~ response x iteration. Need to think what the positive value means vs negative value mean….baseline iteration 1 at zero…Taxa into camps interaction terms are significant vs consistent
+
+This should teach us about interaction between taxa and plant. Ought to be stable. If pathogen, negative…. Commensals or mutualist. Relationship could be different amongst Clade. Venn Diagram....
+
+
+```{r}
+#Function 5:
+geomMeans_DESeq2_ResXIt = function(ps_object){
+diagdds_clade= phyloseq_to_deseq2(ps_object, ~ Response * Iteration)
+
+gm_mean = function(x, na.rm=TRUE){
+  exp(sum(log(x[x > 0]), na.rm=na.rm) / length(x))
+}
+
+geoMeans = apply(counts(diagdds_clade), 1, gm_mean)
+diagdds = estimateSizeFactors(diagdds_clade, geoMeans = geoMeans)
+
+diagdds_clade = DESeq(diagdds, fitType="parametric")
+return(diagdds_clade)
+}
+```
+
+
+###At ASV level:
+
+Response * Iteration : Microbes that have been there consistently...with positive plant response....
+
+```{r}
+#Andigenum and Response over time:
+physeq_Andigenum = subset_samples(physeq_trimmed, Clade == 'A' & Response != "NA" & Soil_inoculation != "Sterile")
+physeq_Andigenum = subset_samples(physeq_Andigenum, sample_sums(physeq_Andigenum) != 0)
+diagdds_ResXItA_ASV = geomMeans_DESeq2_ResXIt(physeq_Andigenum)
+res_ResXItA_ASV= res_table(diagdds_ResXItA_ASV,physeq_Andigenum)
+sigtab_ResXItA_ASV = res_ResXItA_ASV[which(res_ResXItA_ASV$padj < 0.05), ]
+
+
+#Chiletanum and Response over time:
+physeq_Chiletanum = subset_samples(physeq_trimmed, Clade == 'C' & Response != "NA" & Soil_inoculation != "Sterile")
+physeq_Chiletanum = subset_samples(physeq_Chiletanum, sample_sums(physeq_Chiletanum) != 0)
+diagdds_ResXItC_ASV = geomMeans_DESeq2_ResXIt(physeq_Chiletanum)
+res_ResXItC_ASV= res_table(diagdds_ResXItC_ASV,physeq_Chiletanum)
+sigtab_ResXItC_ASV = res_ResXItC_ASV[which(res_ResXItC_ASV$padj < 0.05), ]
+
+
+#Modern and Response over time:
+physeq_Modern = subset_samples(physeq_trimmed, Clade == 'M' & Response != "NA" & Soil_inoculation != "Sterile")
+physeq_Modern = subset_samples(physeq_Modern, sample_sums(physeq_Modern) != 0)
+diagdds_ResXItM_ASV = geomMeans_DESeq2_ResXIt(physeq_Modern)
+res_ResXItM_ASV= res_table(diagdds_ResXItM_ASV,physeq_Modern)
+sigtab_ResXItM_ASV = res_ResXItM_ASV[which(res_ResXItM_ASV$padj < 0.05), ]
+
+```
+At ASV level: We do see a lot more differentially abundant ASVs for moderns... 
+
+```{r}
+sigtab_ResA_FamP = subset(sigtab_ResXItA_ASV, log2FoldChange > 0)
+sigtab_ResC_FamP = subset(sigtab_ResXItC_ASV, log2FoldChange > 0)
+sigtab_ResM_FamP = subset(sigtab_ResXItM_ASV, log2FoldChange > 0)
+
+my_list <- list(sigtab_ResC_FamP$Family,sigtab_ResC_FamP$Family,sigtab_ResM_FamP$Family)
+names(my_list) = c("Andigenum","Chiletanum","Modern")
+Vstem <- Venn(my_list)
+plot(Vstem, doWeights = FALSE)
+
+Vstem@IntersectionSets
+```
+
+```{r}
+sigtab_ResA_FamN = subset(sigtab_ResXItA_ASV, log2FoldChange < 0)
+sigtab_ResC_FamN = subset(sigtab_ResXItC_ASV, log2FoldChange < 0)
+sigtab_ResM_FamN = subset(sigtab_ResXItM_ASV, log2FoldChange < 0)
+
+my_list <- list(sigtab_ResC_FamN$Family,sigtab_ResC_FamN$Family,sigtab_ResM_FamN$Family)
+names(my_list) = c("Andigenum","Chiletanum","Modern")
+Vstem <- Venn(my_list)
+plot(Vstem, doWeights = FALSE)
+
+Vstem@IntersectionSets
+```
+
+
+***
+
+#Plant growth and Microbial Response with Time (~ Response * Time):
+
+##At Phyla Level:
+```{r}
+
+physeq_Andigenum = subset_samples(physeq_trimmed, Clade == 'A' & Response != "NA" & Soil_inoculation != "Sterile")
+physeq_phylaA = tax_glom(physeq_Andigenum,taxrank=rank_names(physeq_Andigenum)[2])
+physeq_phylaA = subset_taxa(physeq_phylaA, Phylum != "NA")
+physeq_phylaA = subset_samples(physeq_phylaA, sample_sums(physeq_phylaA) != 0)
+diagdds_ResA_Phyla = geomMeans_DESeq2_ResXIt(physeq_phylaA)
+sigtab_ResA_PhyTime = DESeq_table(diagdds_ResA_Phyla,physeq_phylaA)
+res_A_PhyTime = res_table(diagdds_ResA_Phyla,physeq_phylaA)
+
+#Chiletanum growth and Microbial Response
+physeq_Chiletanum = subset_samples(physeq_trimmed, Clade == 'C' & Response != "NA" & Soil_inoculation != "Sterile")
+physeq_phylaC = tax_glom(physeq_Chiletanum,taxrank=rank_names(physeq_Chiletanum)[2])
+physeq_phylaC = subset_taxa(physeq_phylaC, Phylum != "NA")
+physeq_phylaC = subset_samples(physeq_phylaC, sample_sums(physeq_phylaC) != 0)
+diagdds_ResC_Phyla = geomMeans_DESeq2_ResXIt(physeq_phylaC)
+res_C_PhyTime = res_table(diagdds_ResC_Phyla,physeq_phylaC)
+sigtab_C_PhyTime = res_C_PhyTime[which(res_C_PhyTime$padj < 0.05), ]
+
+
+#Modern growth and Microbial Response
+physeq_Modern = subset_samples(physeq_trimmed, Clade == 'M' & Response != "NA" & Soil_inoculation != "Sterile")
+physeq_phylaM = tax_glom(physeq_Modern,taxrank=rank_names(physeq_Modern)[2])
+physeq_phylaM = subset_taxa(physeq_phylaM, Phylum != "NA")
+physeq_phylaM = subset_samples(physeq_phylaM, sample_sums(physeq_phylaM) != 0)
+diagdds_ResM_Phyla = geomMeans_DESeq2_ResXIt(physeq_phylaM)
+res_M_PhyTime = res_table(diagdds_ResM_Phyla,physeq_phylaM)
+sigtab_M_PhyTime = res_M_PhyTime[which(res_M_PhyTime$padj < 0.05), ]
+
+```
+
+```{r}
+sigtab_ResA_FamP = subset(sigtab_ResA_Fam, log2FoldChange > 0)
+sigtab_ResC_FamP = subset(sigtab_ResC_Fam, log2FoldChange > 0)
+sigtab_ResM_FamP = subset(sigtab_ResM_Fam, log2FoldChange > 0)
+
+my_list <- list(sigtab_ResC_FamP$Family,sigtab_ResC_FamP$Family,sigtab_ResM_FamP$Family)
+names(my_list) = c("Andigenum","Chiletanum","Modern")
+Vstem <- Venn(my_list)
+plot(Vstem, doWeights = FALSE)
+
+Vstem@IntersectionSets
+```
+
+
+**Results:** 
+Chiletanum: Firmicutes (Positive), Chloroflexi (Negative), Desulfobacterota (Negative), Proteobacteria (Positive), Actinobacteriota (Positive), Acidobacteriota (Negative) with Plant growth with time
+
+Andigneum: Dependentiae Positive with Plant Growth with Time
+
+Moderns: None
+
+##At Family Level:
+```{r}
+physeq_Andigenum = subset_samples(physeq_trimmed, Clade == 'A' & Response != "NA" & Soil_inoculation != "Sterile")
+physeq_FamilyA = tax_glom(physeq_Andigenum,taxrank=rank_names(physeq_Andigenum)[5])
+physeq_FamilyA = subset_taxa(physeq_FamilyA, Family != "NA")
+physeq_FamilyA = subset_samples(physeq_FamilyA, sample_sums(physeq_FamilyA) != 0)
+diagdds_ResA_Family = geomMeans_DESeq2_ResXIt(physeq_FamilyA)
+res_ResA_FamTime = res_table(diagdds_ResA_Family,physeq_FamilyA)
+sigtab_ResA_FamTime = res_ResA_FamTime[which(res_ResA_FamTime$padj < 0.05), ]
+
+#Chiletanum growth and Microbial Response
+physeq_Chiletanum = subset_samples(physeq_trimmed, Clade == 'C' & Response != "NA" & Soil_inoculation != "Sterile")
+physeq_FamilyC = tax_glom(physeq_Chiletanum,taxrank=rank_names(physeq_Chiletanum)[5])
+physeq_FamilyC = subset_taxa(physeq_FamilyC, Family != "NA")
+physeq_FamilyC = subset_samples(physeq_FamilyC, sample_sums(physeq_FamilyC) != 0)
+diagdds_ResC_Family = geomMeans_DESeq2_ResXIt(physeq_FamilyC)
+res_ResC_FamTime = res_table(diagdds_ResC_Family,physeq_FamilyC)
+sigtab_ResC_FamTime = res_ResC_Family[which(res_ResC_Family$padj < 0.05), ]
+
+
+#Modern growth and Microbial Response
+physeq_Modern = subset_samples(physeq_trimmed, Clade == 'M' & Response != "NA" & Soil_inoculation != "Sterile")
+physeq_FamilyM = tax_glom(physeq_Modern,taxrank=rank_names(physeq_Modern)[5])
+physeq_FamilyM = subset_taxa(physeq_FamilyM, Phylum != "NA")
+physeq_FamilyM = subset_samples(physeq_FamilyM, sample_sums(physeq_FamilyM) != 0)
+diagdds_ResM_Family = geomMeans_DESeq2_ResXIt(physeq_FamilyM)
+res_ResM_FamTime = res_table(diagdds_ResM_Family ,physeq_FamilyM)
+sigtab_ResM_FamTime = res_ResM_Family[which(res_ResM_Family$padj < 0.05), ]
+
+```
+
+**Results:** 
+Chiletanum:Xanthomonadales (Order), Bacillaceae(Family), R7C24 (family) all enriched with positive plant growth with time 
+
+Andigeneum: 
+
+Moderns: Flavobacteriales (Order)
