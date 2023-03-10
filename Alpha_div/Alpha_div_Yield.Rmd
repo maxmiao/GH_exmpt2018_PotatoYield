@@ -1,0 +1,161 @@
+---
+title: "Yield and Alpha diversity"
+output: html_notebook
+---
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Cmd+Shift+Enter*. 
+
+```{r}
+library(vegan)
+library(tidyverse)
+library(phyloseq)
+library(ggplot2)
+library(RColorBrewer)
+library(DESeq2)
+library(reshape2)
+```
+
+
+```{r}
+ps.merged = readRDS("~/Library/CloudStorage/Box-Box/Lankau_Lab/Greenhouse_Exmpt_2018/16S/ps.merged")
+physeq_filtered = subset_samples(ps.merged, Soil_inoculation != "Sterile" & Response != "NA")
+
+physeq_trimmed <- prune_taxa(speciesSums(physeq_filtered) > 0, physeq_filtered)
+#removed taxa rows that are empty in phyloseq object
+
+physeq_trimmed <- prune_samples(sample_sums(physeq_trimmed)>=2000,physeq_trimmed)
+#removed samples that are less 2000 reads in phyloseq object
+
+```
+
+
+Generate Alpha Diversity values: 
+
+```{r}
+alpha_div_alpha = estimate_richness(physeq_trimmed,measures = c("Shannon","Chao1", "Simpson")) #generates data table of alpha diversity
+data_alpha = sample_data(physeq_trimmed)
+merged_data_alpha = merge(data_alpha,alpha_div_alpha, by = "row.names")
+```
+
+## Questions of interest: 
+> How does diversity affect plant response? Is it clade dependent? 
+
+
+Modeling it: 
+```{r}
+alpha_shan = lmer(Response ~ Shannon * Clade * Soil_type.x * Selection.x * Iteration + (1|Genotype) + (1|Block), data = merged_data_alpha)
+AOV_Shan = anova(alpha_shan)
+summary(alpha_shan)
+AOV_Shan
+
+```
+Shannon diversity is linked to Response. Decrease in Shannon diversity means more positive response.
+
+**Andigenum**
+```{r}
+alpha_shan = lmer(Response ~ Shannon * Soil_type.x * Selection.x * Iteration + (1|Genotype) + (1|Block), data = subset(merged_data_alpha, Clade == "A" & Selection.x != "none"))
+AOV_Shan = anova(alpha_shan)
+summary(alpha_shan)
+AOV_Shan
+```
+We do see that for Andigenum clade potatoes Shannon does indeed lead to differences in response...(decrease in Shannon diversity leads to more positive potato response). 
+
+**Chiletanum**
+```{r}
+alpha_shan = lmer(Response ~ Shannon * Soil_type.x * Selection.x * Iteration + (1|Genotype) + (1|Block), data = subset(merged_data_alpha, Clade == "C"))
+AOV_Shan = anova(alpha_shan)
+summary(alpha_shan)
+AOV_Shan
+```
+We see no affect of diversity on response for Chiletanum potatoes.
+
+**Modern**
+```{r}
+alpha_shan = lmer(Response ~ Shannon * Soil_type.x * Selection.x * Iteration + (1|Genotype) + (1|Block), data = subset(merged_data_alpha, Clade == "M" & Iteration == 5))
+AOV_Shan = anova(alpha_shan)
+summary(alpha_shan)
+AOV_Shan
+```
+We see that no affect of Shannon diversity or its interactions that positively influences modern potato yield. 
+
+See that Domestication has had some affect on how plants are responsive to alpha diversity in terms of microbial composition. 
+
+***
+**Chao alpha diversity**: Skews more towards rare taxa
+
+
+```{r}
+alpha_Chao = lmer(Response ~ Chao1 * Clade * Soil_type.x * Selection.x * Iteration + (1|Genotype) + (1|Block), data = merged_data_alpha)
+AOV_Chao = anova(alpha_Chao)
+summary(alpha_Chao)
+AOV_Chao
+```
+So it looks a bit more interesting here looking at alpha diveristy in terms of Chao1
+
+
+**Andigenum**
+```{r}
+alpha_Chao = lmer(Response ~ Chao1 * Soil_type.x * Selection.x * Iteration + (1|Genotype) + (1|Block), data = subset(merged_data_alpha, Clade == "A" & Iteration != 1))
+AOV_Chao = anova(alpha_Chao)
+summary(alpha_Chao)
+AOV_Chao
+```
+Andigenum overall seems to favor less alpha diversity in terms of rare taxa in terms of plant response...
+
+
+**Chiletanum**
+```{r}
+alpha_Chao = lmer(Response ~ Chao1 * Soil_type.x * Selection.x * Iteration + (1|Genotype) + (1|Block), data = subset(merged_data_alpha, Clade == "C" & Iteration != 1))
+AOV_Chao = anova(alpha_Chao)
+summary(alpha_Chao)
+AOV_Chao
+```
+Chao1 alpha diveristy has no affect on plant response...
+
+**Modern**
+```{r}
+alpha_Chao = lmer(Response ~ Chao1 * Soil_type.x * Selection.x * Iteration + (1|Genotype) + (1|Block), data = subset(merged_data_alpha, Clade == "M" & Iteration != 1))
+AOV_Chao = anova(alpha_Chao)
+summary(alpha_Chao)
+AOV_Chao
+```
+Selection was important in determining plant response but no microbial effect was observed in terms of alpha diversity.
+
+***
+
+Simpson's diveristy: More focused on dominate taxa
+
+**Andigenum**
+```{r}
+alpha_Simp = lmer(Response ~ Simpson * Soil_type.x * Selection.x * Iteration + (1|Genotype) + (1|Block), data = subset(merged_data_alpha, Clade == "A" & Iteration != 1))
+AOV_Simp = anova(alpha_Simp)
+summary(alpha_Simp)
+AOV_Simp
+```
+
+
+**Chiletanum**
+```{r}
+alpha_Simp = lmer(Response ~ Simpson * Soil_type.x * Selection.x * Iteration + (1|Genotype) + (1|Block), data = subset(merged_data_alpha, Clade == "C" & Iteration != 1))
+AOV_Simp = anova(alpha_Simp)
+summary(alpha_Simp)
+AOV_Simp
+```
+Interestingly Dominate taxa diversity measured thru Simpson's index had an affect on plant response in Chiletanum Clade. 
+
+**Modern**
+```{r}
+alpha_Simp = lmer(Response ~ Simpson * Soil_type.x * Selection.x * Iteration + (1|Genotype) + (1|Block), data = subset(merged_data_alpha, Clade == "M" & Iteration != 1))
+AOV_Simp = anova(alpha_Simp)
+summary(alpha_Simp)
+AOV_Simp
+```
+Dominate taxa had no affect on plant response in modern clades. 
+
+
+*Results*: Andigenum Clade we see that response was linked to diversity across all three metrics of measuring alpha diveristy. Chiletanum we saw response was linked to alpha diversity when looking at Shannon and Simpson's index which both consider evenness more (Leans towards dominate taxas). Modern, we no link between alpha diversity and variation in plant response. 
+
+
+

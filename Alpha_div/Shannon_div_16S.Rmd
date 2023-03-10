@@ -1,0 +1,353 @@
+---
+title: "Shannon Diversity Analsysis"
+output:
+  html_document:
+    df_print: paged
+---
+```{r}
+#Load packages used for analysis 
+
+library(vegan)
+library(tidyverse)
+library(phyloseq)
+library(ggplot2)
+library(RColorBrewer)
+library(DESeq2)
+library(reshape2)
+```
+
+*Step 1* Load phyloseq object and prep data for phyloseq
+```{r}
+ps.merged = readRDS("~/Library/CloudStorage/Box-Box/Lankau_Lab/Greenhouse_Exmpt_2018/16S/ps.merged.RDS")
+```
+
+
+Preparing data:
+```{r}
+physeq_filtered = subset_samples(ps_merged, Soil_inoculation != "Sterile" & Response != "NA")
+
+physeq_filtered<- prune_species(speciesSums(physeq_filtered) > 0, physeq_filtered)
+#removed taxa rows that are empty in phyloseq object
+
+physeq_filtered <- prune_samples(sample_sums(physeq_trimmed)>=2000,physeq_trimmed)
+#removed samples that are less 2000 reads in phyloseq object
+
+rank_names(physeq_filtered)
+```
+function we used is "deprecated" meaning its dated function...but its okay...
+
+
+```{r}
+#Because taxa table sturcture contain additional columns before Kingdom, the merging process does not work properly. By moving the first 2 column to the back, the function will work as intended.
+
+# Re-order the columns
+physeq_trimmed = physeq_filtered
+tax_table(physeq_trimmed) <- tax_table(physeq_trimmed)[,c(11,12,1:10)]
+rank.names(physeq_trimmed)
+
+#Trouble shooting: 
+
+#psdata_phyla = tax_glom(physeq_trimmed,taxrank=rank_names(physeq_trimmed)[2])
+#alpha_div = estimate_richness(psdata_phyla,measures = c("Shannon","Chao1", "Simpson"))
+#data_taxa = sample_data(psdata_phyla)
+#merged_data_phyla = merge(data_taxa,alpha_div, by = "row.names")
+#merged_data_phyla
+
+```
+
+
+Let's explore diversity at multiple levels (Phyla, Family, ASV) between each Clade:
+Shannon = evenness and richness are equally taken into consideration 
+Chao1 = Richness plays a larger role giving greater emphasis
+
+
+*Step 2* Generating alpha diversity indices
+
+Diversity Indexes
+Shannon: Equally balances evenness and richness in calculating a value
+Chao1: Tends to favor more rare taxa (greater emphasis on richness)
+Simpson: Favors more dominant taxa more (greater emphasis on evenness)
+
+
+Now let's try running all this as a function since we will be doing this alot:
+```{r}
+alpha_div_f = function(psdata,VALUE){
+  psdata = subset_samples(psdata)
+  psdata = tax_glom(psdata,taxrank=rank_names(psdata)[VALUE])
+  alpha_div = estimate_richness(psdata,measures = c("Chao1","Shannon", "Simpson"))
+  data_taxa = sample_data(psdata)
+  merged_data_taxa = merge(data_taxa,alpha_div, by = "row.names")
+  return(merged_data_taxa)
+}
+
+merged_data_ASV = alpha_div_f(physeq_trimmed,11)
+
+merged_data_fam = alpha_div_f(physeq_trimmed,5)
+
+merged_data_Phyla = alpha_div_f(physeq_filtered,2)
+
+#DADA2 does not call singletons. Therefore Chao1 (estimating richness) is challenging to do because its generally difficult to differentiate singletons from singleton error. 
+
+```
+
+
+```{r}
+rank_names(merged_data_ASV)
+rank_names(merged_data_fam)
+rank_names(merged_data_Phyla)
+```
+
+
+*Step 3* Modeling alpha diversity 
+
+**Question 1**: Does alpha diversity differ between Clades? Yes but its not very statistically significant...
+
+Based on our beta diversity data, we saw that Clade was a major indicator of variance at iteration 3 on wards. 
+
+#ASV level
+
+**Shannon diversity**
+```{r}
+mean_div_Phyla = merged_data_Phyla %>%
+  group_by(Clade) %>%
+  summarize(avg_shannon = mean(Shannon), avg_Chao1 = mean(Chao1), avg_Simpsom = mean(Simpson))
+
+fill_colors <- RColorBrewer::brewer.pal(3,"Set1")
+
+merged_data_ASV3 = subset(merged_data_ASV,Iteration == 3)
+
+ggplot_chao1 = ggplot(merged_data_Phyla, aes(x = Iteration, y = Shannon, fill = Clade, group = Iteration))+
+  geom_dotplot(binaxis = "y", stackdir = "center", alpha = 2, dotsize = 0.5)+
+  theme_bw()+
+  facet_wrap(~Clade)
+ggplot_chao1
+```
+
+
+**Alpha diversity timepoint 3**
+```{r}
+Chao1_i3 = lmer(Chao1 ~ Clade * Soil_type.x * Selection.x + (1|Block) + (1|Clade/Genotype), data = subset(merged_data_ASV, Iteration == 3))
+anova(Chao1_i3)
+summary(Chao1_i3)
+```
+
+**Alpha diversity at timepoint 5**
+```{r}
+Chao1_i5 = lmer(Chao1 ~ Clade * Soil_type.x * Selection.x + (1|Block) + (1|Clade/Genotype), data = subset(merged_data_fam, Iteration == 5))
+anova(Chao1_i5)
+summary(Chao1_i5)
+```
+
+#Change in Chao1 over time (Use in Paper):
+```{r}
+model_Chao1 = lmer(Shannon ~ Clade * Soil_type.x * Iteration * Selection.x + (1|Iteration/Block) + (1|Clade/Genotype), data = subset(merged_data_ASV, Selection.x != "none" & Chao1 > 0))
+anova(model_Chao1)
+summary(model_Chao1)
+```
+```{r}
+fill_colors <- RColorBrewer::brewer.pal(3,"Set1")
+
+merged_data_Phyla1 = subset(merged_data_Phyla, Chao1 > 0)
+
+ggplot_chao1 = ggplot(merged_data_Phyla1, aes(x = Iteration, y = Chao1, fill = Clade, group = Iteration))+
+  geom_dotplot(binaxis = "y", stackdir = "center", alpha = 2, dotsize = 0.5)+
+  theme_bw()+
+  facet_wrap(~Clade)
+ggplot_chao1
+```
+
+*Conclusions* (Chao1 index): We see that overall ASV richness was varied overtime the variation seems to have increased...So it looks like looking at species richness we were able to generate variation from our soil selection experiment but that was only realizable at iteration 5. Variation was greater in moderns that in Andigenum and lesser extent in Chiletanum landraces. 
+
+Clade:Iteration effect linked to alpha diversity $p = 1.951 \times 10^{-8}$ ***
+But also there's a lot of randomness wrapped in that I guess.
+
+IDK: Should we also do the estimated marginal means as well for alpha diversity or not? and plot it out? 
+
+*Shannon Diversity*
+```{r}
+#write.csv(merged_data_ASV,"merged_data_ASV.csv")
+#merged_data_ASV = read.csv("merged_data_ASV.csv", header = T)
+library(RColorBrewer)
+
+merged_data_ASV$Selection.x
+
+merged_data_ASV$Iteration = as.factor(merged_data_ASV$Iteration)
+
+ggplot_shannon = ggplot(merged_data_ASV, aes(x = Iteration, y = Shannon, fill = Selection.x))+
+  geom_dotplot(binaxis = "y", stackdir = "center", binpositions = "all", alpha = 2, dotsize = 0.5, position = position_dodge(1))+
+  theme_bw()+
+  facet_wrap(~Clade)
+ggplot_shannon
+```
+*Conclusions*(Shannon diversity): Interesting trends in that Shannon diversity we see tighter clustering of modern Clade samples that are increasing in diversity. While Chiletanum is following a similar trend but is more varied. Andigenum shannon diversity is overall pretty consistent excpet for the last iteration...
+
+*Model for Shannon diversity*
+```{r}
+library(lme4)
+library(lmerTest)
+library(emmeans)
+
+
+model_shannon = lmer(Shannon ~ Clade * Soil_type.x * Selection.x + (1|Block) + (1|Clade/Genotype), data = subset(merged_data_Phyla, Iteration == 5))
+anova(model_shannon)
+
+```
+Based on our statistical test Shannon index was weakly linked to Clade...$p-value$ = 0.0096
+
+```{r}
+model_shannon = lmer(Shannon ~ Clade * Soil_type.x * Selection.x * Iteration + (1|Block) + (1|Clade/Genotype), data = subset(merged_data_Phyla, Selection.x != "none"))
+anova(model_shannon)
+summary(model_shannon)
+```
+
+
+
+```{r}
+merged_data_Phyla2 = subset(merged_data_Phyla, Shannon > 0)
+
+ggplot_chao1 = ggplot(merged_data_Phyla2, aes(x = Iteration, y = Shannon, fill = Clade, group = Iteration))+
+  geom_dotplot(binaxis = "y", stackdir = "center", alpha = 2, dotsize = 0.5)+
+  theme_bw()+
+  facet_wrap(~Clade)
+ggplot_chao1
+```
+
+
+
+**Simpson diversity index**
+```{r}
+ggplot_simpson = ggplot(merged_data_Phyla, aes(x = Iteration, y = Shannon, fill = Clade, group = Iteration))+
+  geom_dotplot(binaxis = "y", stackdir = "center", alpha = 2, dotsize = 0.5)+
+  theme_bw()+
+  facet_wrap(~Clade)
+ggplot_simpson
+```
+*Conclusions*: hard to see any effect from Clade on the alpha diversity based on the Simpson index...
+
+
+```{r}
+model_simpson = lmer(Simpson ~ Clade * Soil_type.x * Iteration + (1|Block), data = merged_data_ASV)
+anova(model_simpson)
+summary(model_simpson)
+```
+
+Let's write a function for graphing our data: 
+
+```{r}
+ggplot_alpha_div = function(merged_data, alpha_div){
+  ggplot(merged_data, aes(x = Clade, y = alpha_div, fill = Clade))+
+  geom_dotplot(binaxis = "y", stackdir = "center", alpha = 2)+
+  theme_bw()+
+  facet_wrap(~Iteration)
+}
+
+#hmmm not working....
+```
+
+
+****
+
+#Alpha diversity at Phyla level
+
+*Simpson diversity*
+```{r}
+ggplot_simpson = ggplot(merged_data_phyla, aes(x = Clade, y = Simpson, fill = Clade))+
+  geom_dotplot(binaxis = "y", stackdir = "center", alpha = 2)+
+  theme_bw()+
+  facet_wrap(~Iteration)
+ggplot_simpson
+```
+
+```{r}
+model_simpson = lmer(Simpson ~ Clade * Soil_type.x * Selection.x + (1|Block), data = subset(merged_data_phyla, Iteration == 5))
+anova(model_simpson)
+```
+
+
+```{r}
+model_simpson = lmer(Simpson ~ Clade * Soil_type.x * Selection.x * Iteration + (1|Block), data = merged_data_phyla)
+anova(model_simpson)
+```
+No effect on phyla alpha diversity by Clade. 
+
+
+```{r}
+ggplot_shannon = ggplot(merged_data_phyla, aes(x = Clade, y = Shannon, fill = Clade))+
+  geom_dotplot(binaxis = "y", stackdir = "center", alpha = 2)+
+  theme_bw()+
+  facet_wrap(~Iteration)
+ggplot_shannon
+```
+
+
+```{r}
+model_shannon = lmer(Shannon ~ Clade * Soil_type.x * Selection.x + (1|Block), data = subset(merged_data_phyla, Iteration == 5))
+anova(model_shannon)
+
+```
+
+
+```{r}
+model_shannon = lmer(Shannon ~ Clade * Soil_type.x * Selection.x * Iteration + (1|Block), data = merged_data_phyla)
+anova(model_shannon)
+```
+
+
+***
+
+#Alpha Diversity at Family level:
+
+
+```{r}
+ggplot_shannon = ggplot(merged_data_fam, aes(x = Clade, y = Shannon, fill = Clade))+
+  geom_dotplot(binaxis = "y", stackdir = "center", alpha = 2)+
+  theme_bw()+
+  facet_wrap(~Iteration)
+ggplot_shannon
+```
+
+
+**Model**
+
+```{r}
+model_shannon = lmer(Shannon ~ Clade * Soil_type.x * Selection.x * Iteration + (1|Block), data = subset(merged_data_fam, Selection.x != "none"))
+anova(model_shannon)
+summary(model_shannon)
+```
+No Clade effect, instead see Selection.x and Iteration effect. See that Positive selection increases alpha diveristy (measured by Shannon index) at the family level. 
+
+
+```{r}
+ggplot_simpson = ggplot(merged_data_fam, aes(x = Clade, y = Simpson, fill = Clade))+
+  geom_dotplot(binaxis = "y", stackdir = "center", alpha = 2)+
+  theme_bw()+
+  facet_wrap(~Iteration)
+ggplot_simpson
+```
+
+
+**Model**
+
+```{r}
+model_simpsom = lmer(Simpson ~ Clade * Soil_type.x * Iteration + (1|Block), data = merged_data_fam)
+anova(model_simpsom)
+summary(model_simpsom)
+```
+Iteration is the only thing making a difference at in terms of alpha diversity at the family level...for Simpson's. 
+
+
+```{r}
+ggplot_shannon = ggplot(merged_data_fam, aes(x = Clade, y = Shannon, fill = Clade))+
+  geom_dotplot(binaxis = "y", stackdir = "center", alpha = 2)+
+  theme_bw()+
+  facet_wrap(~Iteration)
+ggplot_shannon
+```
+
+**Model**
+```{r}
+model_shannon = lmer(Shannon ~ Clade * Soil_type.x * Iteration + (1|Block), data = merged_data_fam)
+anova(model_shannon)
+summary(model_shannon)
+```
+

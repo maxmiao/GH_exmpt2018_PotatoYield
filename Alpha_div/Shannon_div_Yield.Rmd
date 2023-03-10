@@ -1,0 +1,243 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+```{r}
+library(vegan)
+library(tidyverse)
+library(phyloseq)
+library(ggplot2)
+library(RColorBrewer)
+library(DESeq2)
+library(reshape2)
+library(emmeans)
+library(lme4)
+library(lmerTest)
+```
+
+
+```{r}
+ps_merged <- readRDS("~/Library/CloudStorage/Box-Box/Lankau_Lab/Greenhouse_Exmpt_2018/16S/Alpha_div/ps_merged.RDS")
+physeq_filtered = subset_samples(ps_merged, Soil_inoculation != "Sterile" & Response != "NA")
+
+```
+
+**Function to calculate Alpha Diversity:**
+```{r}
+alpha_div_f = function(psdata,VALUE){
+  psdata = subset_samples(psdata)
+  psdata = tax_glom(psdata,taxrank=rank_names(psdata)[VALUE])
+  alpha_div = estimate_richness(psdata,measures = c("Chao1","Shannon", "InvSimpson"))
+  data_taxa = sample_data(psdata)
+  merged_data_taxa = merge(data_taxa,alpha_div, by = "row.names")
+  return(merged_data_taxa)
+}
+```
+
+
+```{r}
+
+merged_data_Genus = alpha_div_f(physeq_filtered,6)
+#merged_data_Genus = subset(merged_data_Genus, Chao1 != 0 & Simpson != 0)
+
+#merged_data_fam = alpha_div_f(physeq_trimmed,5)
+#merged_data_ASV = subset(merged_data_ASV, Chao1 != 0 & Simpson != 0)
+
+merged_data_Phyla = alpha_div_f(physeq_filtered,2)
+#merged_data_Phyla = subset(merged_data_Phyla, Chao1 != 0& Simpson != 0)
+
+```
+*Note*: Ofc there's no singletons because DADA2 removes singletons from our dataset. We deliberately trimmed low abundance because it's probably just noise or is an artifact potentially.   
+
+#Modeling Selection and Diversity:
+
+```{r}
+merged_data_Genus1 = subset(merged_data_Genus, Selection.x != "none")
+merged_data_Phyla1 = subset(merged_data_Phyla, Selection.x != "none")
+
+#Export Phyla alpha diversity table for PSF analysis GH25_2020
+#setwd("~/Library/CloudStorage/Box-Box/Lankau_Lab/Greenhouse_Exmpt_2020")
+#write.csv(merged_data_Phyla1, "merged_data_Phyla1.csv", row.names = F)
+
+merged_data_Genus1$Iteration = as.numeric(merged_data_Genus1$Iteration)
+merged_data_Phyla1$Iteration = as.numeric(merged_data_Phyla1$Iteration)
+
+model_Chao1 = lmer(Chao1 ~ Clade * Soil_type.x * Selection.x * Iteration + (1|Iteration/Block) + (1|Clade/Genotype), data = subset(merged_data_Phyla1, Selection.x != "none"))
+anova(model_Chao1)
+summary(model_Chao1)
+
+```
+We do see Selection having an effect on Diversity! 
+
+
+```{r}
+model_Shannon = lmer(Shannon ~ Clade * Soil_type.x * Selection.x * Iteration + (1|Iteration/Block) + (1|Clade/Genotype), data = merged_data_Genus1)
+anova(model_Shannon)
+summary(model_Shannon)
+```
+Selection seems to have an effect on the variance but not the average in Shannon diversity...
+
+
+```{r}
+library(emmeans)
+emmeans_Shannon_Select = emmeans(model_Shannon, "Selection.x", by = "Iteration")
+pairs(emmeans_Shannon_Select)
+```
+Positively selected soils overall over the levels of Clade and Soil_type contain greater alpha diversity. 
+
+ANOVA table tells us that Selection, Iteration, and Clade had an effect on variance in shannon diveristy. We saw a Clade:Iteration, and Selection:Iteration interaction effects.
+
+```{r}
+
+model_Shannon1 = lmer(Shannon ~ Soil_type.x * Selection.x * Iteration + (1|Iteration/Block) + (1|Genotype), data = subset(merged_data_Genus1, Clade == "M"))
+AOV_Shannon1 = anova(model_Shannon1)
+sum_Shannon1 = summary(model_Shannon1)
+Rsq_Shannon1 = r.squaredGLMM(model_Shannon1)
+
+model_Shannon2 = lmer(Shannon ~ Soil_type.x * Selection.x * Iteration + (1|Iteration/Block) + (1|Genotype), data = subset(merged_data_Genus1, Clade == "C"))
+AOV_Shannon2= anova(model_Shannon2)
+sum_Shannon2 = summary(model_Shannon2)
+Rsq_Shannon2 = r.squaredGLMM(model_Shannon2)
+
+model_Shannon3 = lmer(Shannon ~ Soil_type.x * Selection.x * Iteration + (1|Iteration/Block) + (1|Genotype), data = subset(merged_data_Genus1, Clade == "A"))
+AOV_Shannon3 = anova(model_Shannon3)
+sum_Shannon3 = summary(model_Shannon3)
+Rsq_Shannon3 = r.squaredGLMM(model_Shannon3)
+
+```
+
+```{r}
+merged_data_Genus$Iteration = as.factor(merged_data_Genus$Iteration)
+
+ggplot_shannon= ggplot(merged_data_Genus, aes(x = Iteration, y = Shannon, fill = Selection.x))+
+  geom_boxplot(position=position_dodge(1))+
+  geom_dotplot(binaxis = "y", stackdir = "center", alpha = 2, dotsize = 0.5, position = position_dodge(1))+
+  theme_bw()+
+  facet_wrap(~Clade)
+
+ggplot_shannon
+```
+
+
+
+
+```{r}
+merged_data_Genus$Iteration = as.factor(merged_data_Genus$Iteration)
+
+merged_data_GenusH = subset(merged_data_Genus, Soil_type.x == "Hancock")
+
+ggplot_shannonH= ggplot(merged_data_GenusH, aes(x = Iteration, y = Shannon, fill = Selection.x))+
+  geom_boxplot(position=position_dodge(1))+
+  geom_dotplot(binaxis = "y", stackdir = "center", alpha = 2, dotsize = 0.5, position = position_dodge(1))+
+  theme_bw()+
+  facet_wrap(~Clade)
+
+ggplot_shannonH
+```
+
+
+```{r}
+merged_data_Genus$Iteration = as.factor(merged_data_Genus$Iteration)
+
+merged_data_GenusW = subset(merged_data_Genus, Soil_type.x == "Winterfell")
+
+ggplot_shannonW= ggplot(merged_data_GenusW, aes(x = Iteration, y = Shannon, fill = Selection.x))+
+  geom_boxplot(position=position_dodge(1))+
+  geom_dotplot(binaxis = "y", stackdir = "center", alpha = 2, dotsize = 0.5, position = position_dodge(1))+
+  theme_bw()+
+  facet_wrap(~Clade)
+
+ggplot_shannonW
+```
+
+
+
+```{r}
+model_InvSimpson1 = lmer(InvSimpson ~ Soil_type.x * Selection.x * Iteration + (1|Iteration/Block) + (1|Genotype), data = subset(merged_data_Phyla1, Clade == "M"))
+AOV_InvSimpson1 = anova(model_InvSimpson1)
+sum_InvSimpson1 = summary(model_InvSimpson1)
+#Rsq_InvSimpson1 = r.squaredGLMM(model_InvSimpson1)
+
+model_InvSimpson2 = lmer(InvSimpson ~ Soil_type.x * Selection.x * Iteration + (1|Iteration/Block) + (1|Genotype), data = subset(merged_data_Phyla1, Clade == "C"))
+AOV_InvSimpson2= anova(model_InvSimpson2)
+sum_InvSimpson2 = summary(model_InvSimpson2)
+#Rsq_InvSimpson2 = r.squaredGLMM(model_InvSimpson2)
+
+model_InvSimpson3 = lmer(InvSimpson ~ Soil_type.x * Selection.x * Iteration + (1|Iteration/Block) + (1|Genotype), data = subset(merged_data_Phyla1, Clade == "A"))
+AOV_InvSimpson3 = anova(model_InvSimpson3)
+sum_InvSimpson3 = summary(model_InvSimpson3)
+#Rsq_InvSimpson3 = r.squaredGLMM(model_InvSimpson3)
+```
+
+```{r}
+sum_InvSimpson2
+```
+
+
+
+```{r}
+merged_data_Phyla1$Iteration = as.factor(merged_data_Phyla1$Iteration)
+
+merged_data_PhylaW = subset(merged_data_Phyla1, Soil_type.x == "Winterfell")
+
+ggplot_invsimp= ggplot(merged_data_PhylaW, aes(x = Iteration, y = InvSimpson, fill = Selection.x))+
+  geom_boxplot(position=position_dodge(1))+
+  geom_dotplot(binaxis = "y", stackdir = "center", alpha = 2, dotsize = 0.5, position = position_dodge(1))+
+  theme_bw()+
+  facet_wrap(~Clade)
+
+ggplot_invsimp
+```
+
+
+```{r}
+merged_data_Phyla1$Iteration = as.factor(merged_data_Phyla1$Iteration)
+
+merged_data_PhylaH = subset(merged_data_Phyla1, Soil_type.x == "Hancock")
+
+ggplot_invsimp= ggplot(merged_data_PhylaH, aes(x = Iteration, y = InvSimpson, fill = Selection.x))+
+  geom_boxplot(position=position_dodge(1))+
+  geom_dotplot(binaxis = "y", stackdir = "center", alpha = 2, dotsize = 0.5, position = position_dodge(1))+
+  theme_bw()+
+  facet_wrap(~Clade)
+
+ggplot_invsimp
+```
+
+
+#Modeling Genus Alpha Diversity and Response at Iteration 5: 
+
+
+**SI TABLE for Ch3**
+```{r}
+InvSimpsonA = lmer(Response ~  InvSimpson * Soil_type.x * Selection.x + (1|Genotype) + (1|Block), data = subset(merged_data_Phyla, Iteration == 5 & Clade == "A"))
+sum_InvSimpsonA  = summary(InvSimpsonA)
+AOV_InvSimpsonA = anova(InvSimpsonA)
+
+InvSimpsonC = lmer(Response ~  Chao1 * Soil_type.x * Selection.x + (1|Genotype) + (1|Block), data = subset(merged_data_Phyla, Iteration == 5 & Clade == "C"))
+sum_InvSimpsonC  = summary(InvSimpsonC)
+AOV_InvSimpsonC = anova(InvSimpsonC)
+
+InvSimpsonM = lmer(Response ~  InvSimpson * Soil_type.x * Selection.x + (1|Genotype) + (1|Block) , data = subset(merged_data_Phyla, Iteration == 5 & Clade == "M"))
+sum_InvSimpsonM  = summary(InvSimpsonM)
+AOV_InvSimpsonM = anova(InvSimpsonM)
+```
+
+```{r}
+sum_InvSimpsonM
+```
+
+
+```{r}
+sum_InvSimpsonC
+```
+
+
+
+```{r}
+InvSimpsonM = lmer(Response ~  Shannon * Soil_type.x * Selection.x + (1|Genotype) + (1|Block) , data = subset(merged_data_Genus, Iteration == 5 & Clade == "M"))
+sum_InvSimpsonM  = summary(InvSimpsonM)
+AOV_InvSimpsonM = anova(InvSimpsonM)
+```
+
