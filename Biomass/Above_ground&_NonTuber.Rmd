@@ -1,0 +1,32 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+#Above_ground and Non_tuber biomass:
+
+```{r}
+metadata4 = read.csv("metadata3.csv")
+
+metadata2 <- metadata %>%
+  group_by(Clade,Genotype,Soil_type,Selection,Iteration) %>%
+  summarise(avg = mean(Tuber_Mass), n=n(), se = std.error(Tuber_Mass))
+
+#make new column(s) calculated based on plant response: 
+metadata3 <- subset(metadata2, Soil_type == "Sterile" & avg != "NA")
+
+metadata3 <- left_join(metadata,metadata3,by = c("Genotype","Iteration"))
+#metadata3 <- select(metadata3,one_of("Genotype","Iteration","Soil_type.x","Selection.x","avg.x","n.x","se.x","avg.y"))
+metadata3 <- mutate(metadata3, Response = Tuber_Mass - avg)
+#write.csv(metadata3,"metadata3.csv")
+
+```
+
+
+
+```{r}
+metadata2 <- metadata3 %>%
+  group_by(Clade,Genotype,Soil_type,Selection,Iteration) %>%
+  summarise(avg = mean(Tuber_Mass), n=n(), se = std.error(Tuber_Mass))
+```
+

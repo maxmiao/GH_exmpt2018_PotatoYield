@@ -1,0 +1,516 @@
+---
+title: "R Notebook"
+output:
+  pdf_document: default
+  html_notebook: default
+---
+
+
+```{r}
+library(reshape)
+library(dplyr)
+library(ggplot2)
+library(lme4)
+library(lmerTest)
+library(tidyr)
+library(plotrix)
+```
+
+
+```{r}
+metadata <- read.csv(file = "GH_2018_metadata_V3.csv", header = T)
+metadata <- subset(metadata, Tuber_Mass != "NA")
+
+metadata2 <- metadata %>%
+  group_by(Genotype,Soil_type,Selection,Iteration) %>%
+  summarise(avg = mean(Tuber_Mass), n=n(), se = std.error(Tuber_Mass))
+
+metadata2 = unite(metadata2, combo_line, c("Genotype","Soil_type","Selection"), remove = F)
+
+write.csv(metadata2, file="metadata2_sum.csv")
+metadata2 <- read.csv("metadata2_sum.csv", header = T)
+
+
+```
+
+
+
+```{r}
+ggplot(metadata2)+
+  aes(x = Iteration, y = avg, color = as.factor(Genotype), group = combo_line)+
+  scale_x_discrete(name = "Iteration")+
+  scale_y_continuous(name = "Average Tubermass")+
+   geom_point(aes(shape=as.factor(Soil_type)), size=3)+
+    geom_errorbar(aes(ymax=avg+se, ymin=avg-se), width=.1)+
+  geom_line()+
+  theme_classic()+
+  theme(axis.title.x = element_text(face="bold", size=15))+
+  theme(axis.title.y = element_text(face="bold", size=15))
+```
+Too messy...so we can subdivide into Clades..
+
+##Chiletanum 
+
+```{r}
+metadata_C <- subset(metadata, Tuber_Mass != "NA" & Clade == "C")
+
+metadata2 <- metadata_C %>%
+  group_by(Clade,Soil_type,Selection,Iteration) %>%
+  summarise(avg = mean(Tuber_Mass), n=n(), se = std.error(Tuber_Mass))
+
+metadata2 = unite(metadata2, combo_line, c("Clade","Soil_type","Selection"), remove = F)
+
+ggplot(metadata2)+
+  aes(x = Iteration, y = avg, color = as.factor(Soil_type), group = combo_line)+
+  scale_x_discrete(name = "Iteration")+
+  scale_y_continuous(name = "Average Tubermass")+
+   geom_point(aes(shape=as.factor(Selection)), size=3)+
+    geom_errorbar(aes(ymax=avg, ymin=avg), width=.1)+
+  geom_line()+
+  theme_classic()+
+  theme(axis.title.x = element_text(face="bold", size=15))+
+  theme(axis.title.y = element_text(face="bold", size=15))
+```
+
+
+##Andigenum
+
+```{r}
+metadata_A <- subset(metadata, Tuber_Mass != "NA" & Clade == "A")
+
+metadata2 <- metadata_A %>%
+  group_by(Clade,Soil_type,Selection,Iteration) %>%
+  summarise(avg = mean(Tuber_Mass), n=n(), se = std.error(Tuber_Mass))
+
+metadata2 = unite(metadata2, combo_line, c("Clade","Soil_type","Selection"), remove = F)
+
+ggplot(metadata2)+
+  aes(x = Iteration, y = avg, color = as.factor(Soil_type), group = combo_line)+
+  scale_x_discrete(name = "Iteration")+
+  scale_y_continuous(name = "Average Tubermass")+
+   geom_point(aes(shape=as.factor(Selection)), size=3)+
+    geom_errorbar(aes(ymax=avg, ymin=avg), width=.1)+
+  geom_line()+
+  theme_classic()+
+  theme(axis.title.x = element_text(face="bold", size=15))+
+  theme(axis.title.y = element_text(face="bold", size=15))
+```
+
+
+
+##Modern
+
+```{r}
+metadata_M <- subset(metadata, Tuber_Mass != "NA" & Clade == "M")
+
+metadata2 <- metadata_M %>%
+  group_by(Clade,Soil_type,Selection,Iteration) %>%
+  summarise(avg = mean(Tuber_Mass), n=n(), se = std.error(Tuber_Mass))
+
+metadata2 = unite(metadata2, combo_line, c("Clade","Soil_type","Selection"), remove = F)
+
+ggplot(metadata2)+
+  aes(x = Iteration, y = avg, color = as.factor(Soil_type), group = combo_line)+
+  scale_x_discrete(name = "Iteration")+
+  scale_y_continuous(name = "Average Tubermass")+
+   geom_point(aes(shape=as.factor(Selection)), size=3)+
+    geom_errorbar(aes(ymax=avg, ymin=avg), width=.1)+
+  geom_line()+
+  theme_classic()+
+  theme(axis.title.x = element_text(face="bold", size=15))+
+  theme(axis.title.y = element_text(face="bold", size=15))
+```
+
+#Modeling:
+
+##Iteration 5
+```{r}
+
+#Model 1: Clade is considered crossed and randomized throughout the greenhouse and genotype is nested within Block and Clade
+
+#Hypothesis: Iteration 5 we see a selection, soil type , and Clade effect on tuber mass 
+
+it_5 <- lmer(Tuber_Mass ~ Clade * Soil_type * Selection + (1|Clade:Genotype) + (1|Genotype:Block), data = subset(metadata, Iteration == 5))
+
+anova(it_5)
+
+Tuber_mod <- lmer(Tuber_Mass ~ Soil_type * Selection + (1|Clade:Genotype) + (1|Genotype:Block), data = subset(metadata, Iteration == 5 & Clade == "M"))
+
+anova(Tuber_mod)
+
+Tuber_mod <- lmer(Tuber_Mass ~ Soil_type * Selection + (1|Clade:Genotype) + (1|Genotype:Block), data = subset(metadata, Iteration == 3 & Clade == "M"))
+
+anova(Tuber_mod)
+
+
+```
+It looks like soil type, and selection did made a difference! In addition, there is a Soil type:selection interaction effect. 
+
+
+```{r}
+
+metadata2 = subset(metadata, Iteration == 5 & Soil_inoculation != "none" & Tuber_Mass != "NA")
+
+it_5 <- lmer(Tuber_Mass ~ Clade * Soil_type * Selection + (1|Clade:Genotype) + (1|Genotype:Block), data = metadata2)
+
+anova(it_5)
+```
+After removing Sterile pots examining Tubermass at iternation 5, we see that selection process between Positive and Negative did work! It is statistically significant $p = 0.005195$. In addition, selection seemed to have led to different plant outcomes between soil types (Winterfell vs Hancock soil), hence why we see a soil type:selection interaction effect. Clade seems to have not made any difference in tubermass outcome in iternation 5. 
+
+*Responsiveness to microbes*:
+```{r}
+metadata3 = subset(metadata, Iteration == 5 & Soil_inoculation != "none" & Tuber_Mass != "NA")
+
+```
+
+
+
+##Iternation 1: 
+
+```{r}
+metadata2 = subset(metadata, Iteration == 1 & Soil_inoculation != "none" & Tuber_Mass != "NA")
+
+it_1 <- lmer(Tuber_Mass ~ Clade * Soil_type + (1|Clade:Genotype) + (1|Block), data = metadata2)
+
+anova(it_1)
+```
+See that there's no treatment effects observed in our first greenhouse experiment. 
+
+##Iteration 3
+```{r}
+metadata2 = subset(metadata, Iteration == 3 & Soil_inoculation != "none" & Tuber_Mass != "NA")
+
+it_3 <- lmer(Tuber_Mass ~ Clade * Soil_type * Selection + (1|Clade:Genotype) + (1|Block), data = metadata2)
+
+anova(it_3)
+```
+Begin to see by iteration 3 an effect due to selection! Also see a weak soil type effect. 
+
+
+So we don't see a Clade effect on tuber yield in absolute terms. 
+how about looking at response with respect to sterile pots (aka our control?)
+
+
+##Analysis of plant response:
+```{r}
+metadata2 <- metadata %>%
+  group_by(Clade,Genotype,Soil_type,Selection,Iteration) %>%
+  summarise(avg = mean(Tuber_Mass), n=n(), se = std.error(Tuber_Mass))
+
+metadata2 <- metadata %>%
+  group_by(Clade,Genotype,Soil_type,Selection,Iteration) %>%
+  summarise(avg_bio = mean(Tuber_Mass), n=n(), se = std.error(Tuber_Mass))
+
+#make new column(s) calculated based on plant response: 
+metadata3 <- subset(metadata2, Soil_type == "Sterile" & avg != "NA")
+
+metadata3 <- left_join(metadata,metadata3,by = c("Genotype","Iteration"))
+#metadata3 <- select(metadata3,one_of("Genotype","Iteration","Soil_type.x","Selection.x","avg.x","n.x","se.x","avg.y"))
+metadata3 <- mutate(metadata3, Response = Tuber_Mass - avg)
+write.csv(metadata3,"metadata3.csv")
+
+```
+
+
+*First Question*: Is there a Clade effect on microbial response?
+```{r}
+metadata3 <- subset(metadata3, Response != "NA" & Soil_type.x != "Sterile")
+Res_mod <- lmer(Response ~ Clade * Selection.x * Iteration * Soil_type.x+ (1|Genotype) + (1|Block), data = metadata3)
+anova(Res_mod)
+```
+So taken as a whole, we see no difference microbial response due to clade overall...
+
+However, if we subset by timepoint: 
+```{r}
+it_3_data = subset(metadata3, Iteration == 3 & Soil_inoculation != "Sterile" & Tuber_Mass != "NA")
+
+it_3_res <- lmer(Response ~ Clade.x * Soil_type.x * Selection.x + (1|Clade.x:Genotype) + (1|Genotype:Block), data = it_3_data)
+
+anova(it_3_res)
+```
+
+Now let's examine iteration 4:
+```{r}
+it_4_data = subset(metadata3, Iteration == 4 & Soil_inoculation != "Sterile" & Tuber_Mass != "NA")
+
+it_4_res <- lmer(Response ~ Clade * Soil_type.x * Selection.x + (1|Clade:Genotype) + (1|Genotype:Block), data = it_4_data)
+
+anova(it_4_res)
+
+#Now let's dig into Chiletanum:
+it_4_dataC = subset(it_5_data, Clade == "C")
+
+it_4_resC <- lmer(Response ~ Soil_type.x*Selection.x + (1|Genotype) + (1|Block), data = it_4_dataC)
+summary(it_4_resC)
+anova(it_4_resC)
+
+```
+
+
+
+```{r}
+it_4_dataC = subset(metadata3, Iteration == 4 & Soil_inoculation != "Sterile" & Tuber_Mass != "NA" & Clade == "C")
+
+it_4_resC <- lmer(Response ~ Soil_type.x * Selection.x + (1|Genotype) + (1|Block), data = it_4_dataC)
+summary(it_4_resC)
+
+anova(it_4_resC)
+```
+
+```{r}
+it_5_dataC = subset(metadata3, Iteration == 5 & Soil_inoculation != "Sterile" & Tuber_Mass != "NA" & Clade == "C" & Soil_type.x == "Hancock")
+
+it_5_resC <- lmer(Response ~ Selection.x + (1|Genotype) + (1|Block), data = it_5_dataC)
+summary(it_5_resC)
+
+anova(it_5_resC)
+```
+
+
+
+```{r}
+it_5_data = subset(metadata3, Iteration == 5 & Soil_inoculation != "Sterile" & Tuber_Mass != "NA")
+
+it_5_res <- lmer(Response ~ Clade * Soil_type.x * Selection.x + (1|Clade/Genotype) + (1|Genotype/Block), data = it_5_data)
+summary(it_5_res)
+
+anova(it_5_res)
+
+```
+We do see that there's potentially something going on....
+
+
+#TABLE for Ch 3, Table 1A)
+```{r}
+it_5_dataM = subset(it_5_data, Clade == "M")
+
+it_5_resM <- lmer(Response ~ Soil_type.x*Selection.x + (1|Genotype) + (1|Block), data = it_5_dataM)
+summary(it_5_resM)
+anova(it_5_resM)
+
+```
+So Clade and Selection seems to have strong effect after subsetting for hancock soil. But the model failed to converge so I don't know how much to trust this model. 
+
+
+
+**Use for Figure 1C**
+```{r}
+it_5_dataW = subset(it_5_data, Soil_type.x == "Winterfell")
+
+it_5_res <- lmer(Response ~ Clade * Selection.x + (1|Genotype) + (1|Block), data = it_5_dataW)
+
+summary(it_5_res)
+anova(it_5_res)
+```
+So Clade and Selection seems to have strong effect after subsetting for Winterfell soil. But the model failed to converge so I don't know how much to trust this model. 
+
+It seems that the microbial data where clade is seen as a large factor is conditionally true with the plant response (functional response of the MC).
+
+
+```{r}
+it_5_data_avg  <- it_5_data %>%
+  group_by(Selection.x,Clade) %>%
+  summarise(avg = mean(Response), n=n(), se = std.error(Response))
+
+
+ggplot(it_5_data_avg)+
+  aes(x = Selection.x, y = avg, color = Clade)+
+  scale_x_discrete(name = "Selection")+
+  scale_y_continuous(name = "Plant Response to Microbe")+
+   geom_point(aes(shape=as.factor(Selection.x)), size=3)+
+  theme_classic()+
+  theme(axis.title.x = element_text(face="bold", size=15))+
+  theme(axis.title.y = element_text(face="bold", size=15))
+```
+
+
+for modern potatoes:
+**Use as Figure 1A Ch 3**
+```{r}
+metadata_M <- subset(metadata3, Response != "NA" & Clade == "M" & Soil_type.x != "Sterile")
+
+metadata_M_avg  <- metadata_M %>%
+  group_by(Selection.x,Iteration,Soil_type.x) %>%
+  summarise(avg = mean(Response), n=n(), se = std.error(Response))
+
+metadata_M_avg  = unite(metadata_M_avg  , combo_line, c("Soil_type.x","Selection.x"), remove = F)
+
+metadata_M_avg = subset(metadata_M_avg, Soil_type.x != "Winterfell")
+
+ggplot(metadata_M_avg)+
+  aes(x = Iteration, y = avg, color = Selection.x)+
+  scale_x_discrete(name = "Iteration")+
+  scale_y_continuous(name = "Plant Response")+
+   geom_point(aes(color=Selection.x), size=3)+
+  geom_errorbar(aes(ymin=avg-se, ymax=avg+se), width=.2)+
+  geom_line(aes(color=Selection.x))+
+  theme_classic()+
+  theme(axis.title.x = element_text(face="bold", size=15))+
+  theme(axis.title.y = element_text(face="bold", size=15))
+
+```
+
+
+
+For Chiletanum potatoes:
+**Use as Figure 1B Ch 3**
+```{r}
+metadata_C <- subset(metadata3, Response != "NA" & Clade == "C" & Soil_type.x != "Sterile")
+
+metadata_C_avg  <- metadata_C %>%
+  group_by(Selection.x,Iteration,Soil_type.x) %>%
+  summarise(avg = mean(Response), n=n(), se = std.error(Response))
+
+metadata_C_avg  = unite(metadata_C_avg  , combo_line, c("Soil_type.x","Selection.x"), remove = F)
+
+metadata_C_avg = subset(metadata_C_avg, Soil_type.x != "Winterfell")
+
+
+ggplot(metadata_C_avg)+
+  aes(x = Iteration, y = avg, color = Selection.x)+
+  scale_x_discrete(name = "Iteration")+
+  scale_y_continuous(name = "Plant Response")+
+   geom_point(aes(color=Selection.x), size=3)+
+  geom_errorbar(aes(ymin=avg-se, ymax=avg+se), width=.2)+
+  geom_line(aes(color=Selection.x))+
+  theme_classic()+
+  theme(axis.title.x = element_text(face="bold", size=15))+
+  theme(axis.title.y = element_text(face="bold", size=15))
+```
+
+```{r}
+metadata_C <- subset(metadata3, Response != "NA" & Clade == "C" & Soil_type.x != "Sterile")
+
+Clade_C_res <- lmer(Response ~ Soil_type.x*Selection.x*Iteration+ (1|Genotype) + (1|Iteration/Block), data = metadata_C)
+
+anova(Clade_C_res)
+```
+
+
+
+For andigenum potatoes:
+**Use as Figure 1C Ch 3**
+```{r}
+metadata_A <- subset(metadata3, Response != "NA" & Clade == "A" & Soil_type.x != "Sterile")
+
+metadata_A_avg  <- metadata_A %>%
+  group_by(Selection.x,Iteration,Soil_type.x) %>%
+  summarise(avg = mean(Response), n=n(), se = std.error(Response))
+
+metadata_A_avg  = unite(metadata_A_avg  , combo_line, c("Soil_type.x","Selection.x"), remove = F)
+
+metadata_A_avg = subset(metadata_A_avg, Soil_type.x != "Winterfell")
+
+ggplot(metadata_A_avg)+
+  aes(x = Iteration, y = avg, color = as.factor(Selection.x))+
+  scale_x_discrete(name = "Iteration (1-5)")+
+  scale_y_continuous(name = "Plant Response")+
+  geom_point(aes(color=Selection.x), size=3)+
+  geom_errorbar(aes(ymin=avg-se, ymax=avg+se), width=.2)+
+  geom_line(aes(color=Selection.x))+
+  theme_classic()+
+  theme(axis.title.x = element_text(face="bold", size=15))+
+  theme(axis.title.y = element_text(face="bold", size=15))
+```
+
+
+
+```{r}
+metadata_A <- subset(metadata3, Response != "NA" & Clade == "M" & Soil_type.x != "Sterile")
+
+Clade_A_res <- lmer(Response ~ Soil_type.x*Selection.x* + (1|Genotype) + (1|Block), data = metadata_A)
+
+anova(Clade_A_res)
+```
+
+***
+
+#winterfell soils:
+
+```{r}
+metadata_A <- subset(metadata3, Response != "NA" & Clade == "A" & Soil_type.x != "Sterile")
+
+metadata_A_avg  <- metadata_A %>%
+  group_by(Selection.x,Iteration,Soil_type.x) %>%
+  summarise(avg = mean(Response), n=n(), se = std.error(Response))
+
+metadata_A_avg  = unite(metadata_A_avg  , combo_line, c("Soil_type.x","Selection.x"), remove = F)
+
+metadata_A_avg = subset(metadata_A_avg, Soil_type.x == "Winterfell")
+
+ggplot(metadata_A_avg)+
+  aes(x = Iteration, y = avg, color = Selection.x)+
+  scale_x_discrete(name = "Iteration (1-5)")+
+  scale_y_continuous(name = "Plant Response")+
+  geom_point(aes(color=Selection.x), size=3)+
+  geom_errorbar(aes(ymin=avg-se, ymax=avg+se), width=.2)+
+  geom_line(aes(color=Selection.x))+
+  theme_classic()+
+  theme(axis.title.x = element_text(face="bold", size=15))+
+  theme(axis.title.y = element_text(face="bold", size=15))
+
+```
+
+
+```{r}
+metadata_C <- subset(metadata3, Response != "NA" & Clade == "C" & Soil_type.x != "Sterile")
+
+metadata_C_avg  <- metadata_C %>%
+  group_by(Selection.x,Iteration,Soil_type.x) %>%
+  summarise(avg = mean(Response), n=n(), se = std.error(Response))
+
+metadata_C_avg  = unite(metadata_C_avg  , combo_line, c("Soil_type.x","Selection.x"), remove = F)
+
+metadata_C_avg = subset(metadata_C_avg, Soil_type.x == "Winterfell")
+
+ggplot(metadata_C_avg)+
+  aes(x = Iteration, y = avg, color = Selection.x)+
+  scale_x_discrete(name = "Iteration")+
+  scale_y_continuous(name = "Plant Response")+
+   geom_point(aes(color=Selection.x), size=3)+
+  geom_errorbar(aes(ymin=avg-se, ymax=avg+se), width=.2)+
+  geom_line(aes(color=Selection.x))+
+  theme_classic()+
+  theme(axis.title.x = element_text(face="bold", size=15))+
+  theme(axis.title.y = element_text(face="bold", size=15))
+```
+
+
+```{r}
+metadata_M <- subset(metadata3, Response != "NA" & Clade == "M" & Soil_type.x != "Sterile")
+
+metadata_M_avg  <- metadata_M %>%
+  group_by(Selection.x,Iteration,Soil_type.x) %>%
+  summarise(avg = mean(Response), n=n(), se = std.error(Response))
+
+metadata_M_avg  = unite(metadata_M_avg  , combo_line, c("Soil_type.x","Selection.x"), remove = F)
+
+metadata_M_avg = subset(metadata_M_avg, Soil_type.x == "Winterfell")
+
+ggplot(metadata_M_avg)+
+  aes(x = Iteration, y = avg, color = Selection.x)+
+  scale_x_discrete(name = "Iteration")+
+  scale_y_continuous(name = "Plant Response")+
+   geom_point(aes(color=Selection.x), size=3)+
+  geom_errorbar(aes(ymin=avg-se, ymax=avg+se), width=.2)+
+  geom_line(aes(color=Selection.x))+
+  theme_classic()+
+  theme(axis.title.x = element_text(face="bold", size=15))+
+  theme(axis.title.y = element_text(face="bold", size=15))
+```
+
+
+
+***
+*Musings*
+
+Why this may have manifested where A) see microbiomes are not co-localizing based on selection (except for iterations 3) and B) see response to microbes (aka PMR) is explained soil_type and selection. 
+
+Scenario 1) Enriching for microbes that are commensals that are not pathogenic to the plant, commensals are host specific but do not lead to qualitative plant response...
+
+Scenario 2) Same microbes that lead to increased plant growth is small portion of the microbial community and due to environmental manipulations vary. These PGPB are not host specific at the sub-species level. Due to chance, manipulations may have depleted them due to stochasticity aka selection sweeps/soil_type (sort of like genetic drift)
+
+Scenario 3) Maybe enriching for microbial communities that are doing some sort of off target functional effect that we are not capturing thru measurement of tubermass. Maybe need to look at other plant metrics (dry biomass)... 
+
+Regardless, we do see that soil_type does play a role in plant response so the environment that the microbes live in do make a difference....
+
