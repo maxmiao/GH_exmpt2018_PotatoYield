@@ -1,1 +1,18 @@
-# GH_exmpt2018_PotatoYield
+# Title of Manuscript (TBD)
+
+## Authors
+Max Miao et al.
+
+## Overview
+This repository contains all scripts used to generate figures and analyses.
+
+## Data Availability
+Raw sequencing data available at NCBI SRA under accession XXXX.
+
+## Index
+1) Figure 1: Beta Diversity 
+2) Figure 2: Alpha Diversity and Richness
+3) Figure 3: DESeq Differential analysis across time
+4) Figure 4: DESeq Differential analysis between timepoint and potato clade
+5) Figure 5: Relative abundance
+6) Figure 6 and 7: Plant Soil Feedback results
