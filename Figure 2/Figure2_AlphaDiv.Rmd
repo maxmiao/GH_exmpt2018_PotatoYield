@@ -1,0 +1,275 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+```{r}
+library(vegan)
+library(tidyverse)
+library(phyloseq)
+library(ggplot2)
+library(RColorBrewer)
+library(DESeq2)
+library(reshape2)
+library(emmeans)
+library(lme4)
+library(lmerTest)
+```
+
+
+```{r}
+ps1 = readRDS("/Preprocessing/ps1_AlphaDiv_02182026.RDS")
+
+
+ps1.clean <- prune_samples(sample_sums(ps1) > 8000, ps1)
+ps1.clean <- subset_samples(ps1.clean, Soil_type.x != "Sterile")
+
+```
+
+
+```{r}
+singleton_counts <- taxa_sums(ps1.clean) == 1
+table(singleton_counts)
+# TRUE = singletons, FALSE = non-singletons
+```
+We have 8051 ASVs that are singletons vs 13 that are not. 
+
+
+**Function to calculate Alpha Diversity:**
+```{r}
+alpha_div <- estimate_richness(ps1.clean, measures = c("Observed", "Chao1", "Shannon", "Simpson"))
+head(alpha_div)
+```
+
+
+```{r}
+
+# 4. Merge with sample metadata (optional)
+alpha_div$SampleID <- rownames(alpha_div)
+alpha_div <- merge(alpha_div, data.frame(sample_data(ps1.clean)), by.x = "SampleID", by.y = "row.names")
+
+
+
+```
+
+
+```{r}
+# 6. Plot for Shannon, Chao, and observed richness
+
+ps1.clean_i1 = subset_samples(ps1.clean, Iteration == 1)
+comparisons <- list(
+  c("A", "C"),
+  c("A", "M"),
+  c("C", "M")
+)
+
+
+Plot_i1 = plot_richness(ps1.clean_i1, measures = c("Observed", "Chao1", "Shannon"), x = "Clade") +
+  geom_boxplot(
+    aes(fill = Clade),
+    width = 0.6,
+    alpha = 0.75,
+    outlier.shape = NA,
+    color = "black"
+  ) +
+  geom_jitter(
+    width = 0.15,
+    size = 2.2,
+    alpha = 0.85,
+    color = "black"
+  ) +
+  facet_wrap(
+    ~variable,
+    scales = "free_y",
+    labeller = labeller(variable = c(
+      Observed = "Observed ASVs",
+      Chao1    = "Chao1 Richness",
+      Shannon  = "Shannon Diversity"
+    ))
+  ) +
+  scale_x_discrete(labels = c(
+    A = "Andigenum",
+    C = "Chiletanum",
+    M = "N. American"
+  )) +
+  labs(
+    x = NULL,
+    y = "Alpha Diversity",
+    fill = NULL
+  ) +
+  theme_classic(base_size = 14) +
+  theme(
+    legend.position = "none",
+    axis.text = element_text(color = "black"),
+    axis.title.y = element_text(face = "bold"),
+    strip.text = element_text(face = "bold", size = 12),
+    strip.background = element_blank()
+  ) + 
+    stat_compare_means(
+    comparisons = comparisons,
+    method = "wilcox.test",
+    p.adjust.method = "BH",
+    label = "p.signif",
+    step.increase = 0.08
+  )
+
+Plot_i1
+```
+
+
+```{r}
+library(ggpubr)
+
+ps1.clean_i5 = subset_samples(ps1.clean, Iteration == 5)
+Plot_i5 = plot_richness(ps1.clean_i5, measures = c("Observed", "Chao1", "Shannon"), x = "Clade") +
+  geom_boxplot(
+    aes(fill = Clade),
+    width = 0.6,
+    alpha = 0.75,
+    outlier.shape = NA,
+    color = "black"
+  ) +
+  geom_jitter(
+    width = 0.15,
+    size = 2.2,
+    alpha = 0.85,
+    color = "black"
+  ) +
+  facet_wrap(
+    ~variable,
+    scales = "free_y",
+    labeller = labeller(variable = c(
+      Observed = "Observed ASVs",
+      Chao1    = "Chao1 Richness",
+      Shannon  = "Shannon Diversity"
+    ))
+  ) +
+  scale_x_discrete(labels = c(
+    A = "Andigenum",
+    C = "Chiletanum",
+    M = "N. American"
+  )) +
+  labs(
+    x = NULL,
+    y = "Alpha Diversity",
+    fill = NULL
+  ) +
+  theme_classic(base_size = 14) +
+  theme(
+    legend.position = "none",
+    axis.text = element_text(color = "black"),
+    axis.title.y = element_text(face = "bold"),
+    strip.text = element_text(face = "bold", size = 12),
+    strip.background = element_blank()
+  ) + 
+    stat_compare_means(
+    comparisons = comparisons,
+    method = "wilcox.test",
+    p.adjust.method = "BH",
+    label = "p.signif",
+    step.increase = 0.08
+  )
+
+
+Plot_i5
+```
+
+
+```{r}
+library(cowplot)
+
+combined_plot <- plot_grid(Plot_i1, Plot_i5, labels = c("A", "B"), nrow = 2)
+combined_plot
+
+#ggsave("Figure_1.pdf", combined_plot, width = 12, height = 10) #At ASV level. 
+```
+
+
+
+***
+
+*** misc *** 
+
+Let's try calculating Faith's PD since we have built a phylogeny Tree. 
+
+```{r}
+library(ape)
+
+library(phyloseq)
+
+# Extract taxa names
+otu_taxa <- taxa_names(ps1.clean)
+tree_taxa <- phy_tree(ps1.clean)$tip.label
+
+# Check overlap
+length(intersect(otu_taxa, tree_taxa))
+length(otu_taxa)  # total OTUs in your phyloseq object
+length(tree_taxa) # total tips in your tree
+
+phy_tree(ps1.clean)
+is.rooted(phy_tree(ps1.clean))
+```
+
+
+```{r}
+library(picante)
+
+# Convert OTU table to matrix
+otu_mat <- as(otu_table(ps1.clean), "matrix")
+
+# Ensure OTUs are rows
+if(taxa_are_rows(ps1.clean)) {
+  otu_mat <- t(otu_mat)
+}
+
+# Compute Faith's PD
+pd_res <- pd(otu_mat, phy_tree(ps1.clean), include.root = TRUE)
+
+# Add PD to sample metadata
+sample_data(ps1.clean)$Faith_PD <- pd_res$PD
+
+# Add to sample metadata
+sample_data(ps1.clean)$Faith_PD <- pd_res$PD
+
+# Check results
+head(sample_data(ps1.clean)$Faith_PD)
+```
+
+
+```{r}
+# ----------------------------
+# 4. Compute other alpha diversity metrics (Chao1, Shannon)
+# ----------------------------
+rich_df <- estimate_richness(ps1.clean_i5, measures = c("Chao1", "Shannon"))
+
+# Drop standard error columns (se.chao1)
+rich_df <- rich_df[, c("Chao1", "Shannon")]
+
+# Add Faith's PD
+rich_df$Faith_PD <- sample_data(ps1.clean_i5)$Faith_PD
+
+# ----------------------------
+# 5. Add metadata for plotting
+# ----------------------------
+meta_df <- data.frame(sample_data(ps1.clean_i5))
+rich_df$SampleID <- rownames(rich_df)
+rich_df$Treatment <- meta_df$Clade[match(rownames(rich_df), rownames(meta_df))]
+
+# Convert to long format for ggplot
+rich_long <- melt(rich_df, id.vars = c("SampleID", "Treatment"), 
+                  variable.name = "Metric", value.name = "Value")
+
+# ----------------------------
+# 6. Plot alpha diversity
+# ----------------------------
+ggplot(rich_long, aes(x = Treatment, y = Value, fill = Treatment)) +
+  geom_boxplot(alpha = 0.5, outlier.shape = NA) +
+  geom_jitter(width = 0.2, size = 1.5) +
+  facet_wrap(~Metric, scales = "free_y") +
+  theme_bw() +
+  ylab("Alpha Diversity") +
+  xlab("Treatment") +
+  theme(legend.position = "none")
+
+```
+

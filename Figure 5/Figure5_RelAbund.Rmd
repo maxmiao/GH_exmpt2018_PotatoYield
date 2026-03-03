@@ -1,0 +1,122 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+ 
+```{r}
+library(phyloseq)
+library(dplyr)
+library(ggplot2)
+library(RColorBrewer)
+library(forcats)
+```
+
+```{r}
+ps1 = readRDS("/Preprocessed/ps1_DESeq2_02232026.RDS")
+```
+
+
+#Stacked Barchart of Phyloseq object:
+
+```{r}
+#Aggregate at the family Level: 
+ps1_subset = subset_samples(ps1, Iteration != 2 & Iteration != 4)
+```
+
+
+Plot stacked bar chart:
+```{r}
+
+make_family_barplot_iteration_clade <- function(ps_object, top_n = 15) {
+  
+  # 1️⃣ Agglomerate at Family level
+  ps_family <- tax_glom(ps1_subset, taxrank = "Family")
+  ps_family <- prune_samples(sample_sums(ps_family) > 0, ps_family)
+  
+  # 2️⃣ Convert to relative abundance per sample
+  ps_rel <- transform_sample_counts(ps_family, function(x) x / sum(x))
+  
+  # 3️⃣ Melt
+  df <- psmelt(ps_rel)
+  df$Family[is.na(df$Family)] <- "Unclassified"
+  
+  # 4️⃣ Compute mean relative abundance per Iteration + Clade + Family
+  df_summary <- df %>%
+    group_by(Iteration,Clade, Family) %>%
+    summarise(mean_abundance = mean(Abundance), .groups = "drop")
+  
+  # 5️⃣ Select top N families globally
+  top_families <- df_summary %>%
+    group_by(Family) %>%
+    summarise(total = sum(mean_abundance), .groups = "drop") %>%
+    arrange(desc(total)) %>%
+    slice_head(n = 15) %>%
+    pull(Family)
+  
+  df_summary$Family <- ifelse(df_summary$Family %in% top_families,
+                              df_summary$Family,
+                              "Other")
+  
+  # Collapse Others
+  df_summary <- df_summary %>%
+    group_by(Iteration,Clade, Family) %>%
+    summarise(mean_abundance = sum(mean_abundance), .groups = "drop")
+  
+  # 6️⃣ Factor ordering
+  df_summary$Family <- factor(df_summary$Family, 
+                              levels = df_summary %>%
+                                group_by(Family) %>%
+                                summarise(total = sum(mean_abundance)) %>%
+                                arrange(desc(total)) %>%
+                                pull(Family))
+  
+  df_summary$Clade <- factor(df_summary$Clade,
+                             levels = c("A","C","M"))
+  
+  
+  # 7️⃣ Color palette
+  n_colors <- length(unique(df_summary$Family))
+  palette_colors <- colorRampPalette(brewer.pal(8,"Set3"))(n_colors)
+  
+  # 8️⃣ Plot with side-by-side bars by Iteration, stacked by Family
+  p <- ggplot(df_summary, aes(x = Clade, y = mean_abundance, fill = Family)) +
+    geom_bar(stat = "identity", position = position_stack(vjust = 0.5)) +
+    facet_wrap(~Iteration) +
+    scale_fill_manual(values = palette_colors) +
+    ylab("Mean Relative Abundance") +
+    xlab("Potato Clade") +
+    theme_bw() +
+    theme(axis.text.x = element_text(size = 12),
+          axis.text.y = element_text(size = 12),
+          axis.title = element_text(size = 14),
+          legend.text = element_text(size = 10),
+          legend.title = element_blank())
+  
+  return(p)
+}
+
+```
+
+
+
+
+```{r}
+Clade_Iteration_StackPlot <- make_family_barplot_iteration_clade(ps1_subset, top_n = 15)
+Clade_Iteration_StackPlot
+```
+
+```{r}
+p <- Clade_Iteration_StackPlot +
+  scale_x_discrete(labels = c(A = "A",C = "C",M = "NA"))+
+  facet_wrap(~Iteration,labeller = labeller(Iteration = c(
+        `1` = "Iteration 1",
+        `3` = "Iteration 3",
+        `5` = "Iteration 5")))
+
+p 
+
+ggsave("Fig5.tiff", plot = p, width = 8, height = 10, units = "in", dpi = 300)
+
+```
+

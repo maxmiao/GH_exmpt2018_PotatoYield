@@ -1,0 +1,362 @@
+---
+title: "Figure 3 02/02/2026"
+output: html_notebook
+---
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Cmd+Shift+Enter*. 
+
+```{r}
+library(DESeq2)
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+library(ggpubr)
+library(RColorBrewer)
+library(phyloseq)
+```
+
+```{r}
+#Load R environment with our PhyloSeq object:
+ps1 = readRDS("/Preprocessing/ps1_DESeq2_02232026.RDS")
+ps1_filt <- prune_samples(sample_sums(ps1) >= 8000, ps1)
+sample_sums(ps1_filt)
+```
+
+
+```{r}
+#Aggregate counts based on taxa rank (in this case Family)
+ps1_df = tax_glom(ps1_filt,taxrank=rank_names(ps1_filt)[2])
+ps1_df = subset_taxa(ps1_df, Phylum != "NA")
+ps1_df = subset_samples(ps1_df, sample_sums(ps1_df) != 0)
+
+#Now we want to separate based on Potato Clade (A, C, M)
+ps1_df_A = subset_samples(ps1_df, Clade == 'A')
+ps1_df_C = subset_samples(ps1_df, Clade == 'C')
+ps1_df_NA = subset_samples(ps1_df, Clade == 'M')
+
+#Convert Phyoseq objects into DESeq2 objects: 
+dds1_A= phyloseq_to_deseq2(ps1_df_A, ~ Iteration)
+dds1_C= phyloseq_to_deseq2(ps1_df_C, ~ Iteration)
+dds1_NA= phyloseq_to_deseq2(ps1_df_NA, ~ Iteration)
+```
+
+#Normalization step for our samples: 
+
+Normalization using 'esimateSizeFactor' function: Accounts for variation in total read counts between samples so that counts can be comparable across samples without being biased by sequencing depth. We specify 'type = poscounts' for 16S data. Yields relative scaling and is ideal of compositional data like 16S amplicon sequencing. 
+
+
+```{r}
+
+
+design(dds1_A) <- ~ 1 + Iteration
+design(dds1_C) <- ~ 1 + Iteration
+design(dds1_NA) <- ~ 1 + Iteration
+
+dds2_A = estimateSizeFactors(dds1_A, type = "poscounts") 
+dds2_C = estimateSizeFactors(dds1_C, type = "poscounts") 
+dds2_NA = estimateSizeFactors(dds1_NA, type = "poscounts") 
+
+#Re-rerun DESeq2 on subset data after data normalization: 
+dds3_A = DESeq(dds2_A, fitType="parametric")
+dds3_C = DESeq(dds2_C, fitType="parametric")
+dds3_NA = DESeq(dds2_NA, fitType="parametric")
+```
+
+
+```{r}
+#Calculating coefficient vectors for DESeq2 output for each potato Clade
+mod_mat = model.matrix(design(dds3_A), colData(dds3_A))
+
+I1 <- colMeans(mod_mat[dds3_A$Iteration == "1", ])
+I3 <- colMeans(mod_mat[dds3_A$Iteration == "3", ])
+I5 <- colMeans(mod_mat[dds3_A$Iteration == "5", ])
+
+#And we can now define any contrasts we want:
+##For Andigenum contrasts 
+res1_I3_I1 <- results(dds3_A, contrast = I3 - I1)
+res1_I5_I1 <- results(dds3_A, contrast = I5 - I1)
+res1_I5_I3 <- results(dds3_A, contrast = I5 - I3)
+
+```
+
+
+
+```{r}
+#Glue phyla column to DESeq2 object in our results dataframe based on rowname in both objects!
+res_Phyla_A1 = cbind(as(res1_I3_I1, "data.frame"), as(tax_table(ps1_df_A)[rownames(res1_I3_I1), ], "matrix"))
+# Add significance indicator
+  res_df <- res_Phyla_A1 %>%
+    mutate(Significant = ifelse(padj < 0.05, "Yes", "No"), Direction = ifelse(log2FoldChange > 0, "Increased", "Decreased")
+    )
+res_df1 = filter(res_df, res_df$Significant == "Yes")
+
+```
+
+
+
+```{r}
+res_Phyla_A2 = cbind(as(res1_I5_I1, "data.frame"), as(tax_table(ps1_df_A)[rownames(res1_I5_I1), ], "matrix"))
+# Add significance indicator
+  res_df2 <- res_Phyla_A2 %>%
+    mutate(Significant = ifelse(padj < 0.05, "Yes", "No"), Direction = ifelse(log2FoldChange > 0, "Increased", "Decreased")
+    )
+
+res_df2 = filter(res_df2, res_df2$Significant == "Yes")
+```
+
+
+Now we want to overlay pA_1 over pA_2 for our final figure: 
+
+```{r}
+#Prepare data from pA_1 and pA_2 
+res_df1$Comparison <- "Iteration 3"
+res_df2$Comparison <- "Iteration 5"
+
+combined <- bind_rows(res_df1, res_df2)
+
+#Only want to show statisticall significant bacterial families: 
+
+phylum_keep <- combined %>%
+  filter(Significant == "Yes") %>%
+  pull(Phylum) %>%
+  unique()
+
+combined_sig <- combined %>%
+  filter(Phylum %in% phylum_keep)
+
+#Fix Family Ordering: 
+
+phylum_order <- res_df1 %>%
+  filter(Significant == "Yes") %>%
+  arrange(log2FoldChange) %>%
+  pull(Phylum)
+
+combined_sig$Phylum <- factor(combined_sig$Phylum,
+                              levels = phylum_order)
+
+#Plot: 
+
+Plot_A = ggplot(combined_sig,
+       aes(x = log2FoldChange,
+           y = Phylum,
+           fill = Comparison)) +
+  geom_vline(xintercept = 0, linetype = "dashed") +
+  geom_col(position = position_dodge(width = 0.7),
+           width = 0.6) +
+  theme_classic()
+
+Plot_A
+
+```
+
+
+***
+
+Chiletanum Differential abundance over time: 
+
+```{r}
+#Calculating coefficient vectors for DESeq2 output for each potato Clade
+mod_mat = model.matrix(design(dds3_C), colData(dds3_C))
+
+I1 <- colMeans(mod_mat[dds3_C$Iteration == "1", ])
+I3 <- colMeans(mod_mat[dds3_C$Iteration == "3", ])
+I5 <- colMeans(mod_mat[dds3_C$Iteration == "5", ])
+
+#And we can now define any contrasts we want:
+
+##For Chiletanum contrasts 
+res1_I3_I1 <- results(dds3_C, contrast = I3 - I1)
+res1_I5_I1 <- results(dds3_C, contrast = I5 - I1)
+res1_I5_I3 <- results(dds3_C, contrast = I5 - I3)
+
+```
+
+Plot contrast Chiletanum Iteration 3 vs Iteration 1
+```{r}
+res_Phyla = cbind(as(res1_I3_I1, "data.frame"), as(tax_table(ps1_df_C)[rownames(res1_I3_I1), ], "matrix"))
+# Add significance indicator
+  res_df <- res_Phyla %>%
+    mutate(Significant = ifelse(padj < 0.05, "Yes", "No"), Direction = ifelse(log2FoldChange > 0, "Increased", "Decreased")
+    )
+res_df1 = filter(res_df, res_df$Significant == "Yes")
+```
+
+
+***
+
+
+Plot contrast of Chiletanum Iteration 5 vs Iteration 1: 
+```{r}
+res_Phyla = cbind(as(res1_I5_I1, "data.frame"), as(tax_table(ps1_df_C)[rownames(res1_I5_I1), ], "matrix"))
+# Add significance indicator
+  res_df2 <- res_Phyla %>%
+    mutate(Significant = ifelse(padj < 0.05, "Yes", "No"), Direction = ifelse(log2FoldChange > 0, "Increased", "Decreased")
+    )
+
+res_df2 = filter(res_df2, res_df2$Significant == "Yes")
+```
+
+
+***
+Plot Grid for Chiletanum:
+
+```{r}
+
+#Prepare data from pC_1 and pC_2 
+res_df1$Comparison <- "Iteration 3"
+res_df2$Comparison <- "Iteration 5"
+
+combined <- bind_rows(res_df1, res_df2)
+
+#Only want to show statisticall significant bacterial families: 
+
+Phylum_keep <- combined %>%
+  filter(Significant == "Yes") %>%
+  pull(Phylum) %>%
+  unique()
+
+combined_sig <- combined %>%
+  filter(Phylum %in% Phylum_keep)
+
+#Fix Phylum Ordering: 
+
+phylum_order <- res_df1 %>%
+  filter(Significant == "Yes") %>%
+  arrange(log2FoldChange) %>%
+  pull(Phylum)
+
+combined_sig$Phylum <- factor(combined_sig$Phylum,
+                              levels = phylum_order)
+
+#Plot: 
+
+Plot_C = ggplot(combined_sig,
+       aes(x = log2FoldChange,
+           y = Phylum,
+           fill = Comparison)) +
+  geom_vline(xintercept = 0, linetype = "dashed") +
+  geom_col(position = position_dodge(width = 0.7),
+           width = 0.6) +
+  theme_classic()
+
+Plot_C
+```
+
+***
+Contrast Matrix for North America across iteration 1 to iteration 5
+
+```{r}
+#Calculating coefficient vectors for DESeq2 output for each potato Clade
+mod_mat = model.matrix(design(dds3_NA), colData(dds3_NA))
+
+I1 <- colMeans(mod_mat[dds3_NA$Iteration == "1", ])
+I3 <- colMeans(mod_mat[dds3_NA$Iteration == "3", ])
+I5 <- colMeans(mod_mat[dds3_NA$Iteration == "5", ])
+
+#And we can now define any contrasts we want:
+
+##For Chiletanum contrasts 
+res1_I3_I1 <- results(dds3_NA, contrast = I3 - I1)
+res1_I5_I1 <- results(dds3_NA, contrast = I5 - I1)
+res1_I5_I3 <- results(dds3_NA, contrast = I5 - I3)
+```
+
+Plot Contrast of N. American Iteration 3 vs Iteration 1
+```{r}
+res_Phyla = cbind(as(res1_I3_I1, "data.frame"), as(tax_table(ps1_df_NA)[rownames(res1_I3_I1), ], "matrix"))
+# Add significance indicator
+  res_df <- res_Phyla %>%
+    mutate(Significant = ifelse(padj < 0.05, "Yes", "No"), Direction = ifelse(log2FoldChange > 0, "Increased", "Decreased")
+    )
+  
+res_df1 = filter(res_df, res_df$Significant == "Yes")
+```
+
+
+
+```{r}
+res_Phyla = cbind(as(res1_I5_I1, "data.frame"), as(tax_table(ps1_df_NA)[rownames(res1_I5_I1), ], "matrix"))
+# Add significance indicator
+  res_df2 <- res_Phyla %>%
+    mutate(Significant = ifelse(padj < 0.05, "Yes", "No"), Direction = ifelse(log2FoldChange > 0, "Increased", "Decreased")
+    )
+
+res_df2 = filter(res_df2, res_df2$Significant == "Yes")
+```
+
+
+
+```{r}
+#Prepare data from pNA_1 and pNA_2 
+res_df1$Comparison <- "Iteration 3"
+res_df2$Comparison <- "Iteration 5"
+
+combined <- bind_rows(res_df1, res_df2)
+
+#Only want to show statisticall significant bacterial families: 
+
+phylum_keep <- combined %>%
+  filter(Significant == "Yes") %>%
+  pull(Phylum) %>%
+  unique()
+
+combined_sig <- combined %>%
+  filter(Phylum %in% phylum_keep)
+
+#Fix Family Ordering: 
+
+phylum_order <- res_df1 %>%
+  filter(Significant == "Yes") %>%
+  arrange(log2FoldChange) %>%
+  pull(Phylum)
+
+combined_sig$Phylum <- factor(combined_sig$Phylum,
+                              levels = phylum_order)
+
+#Plot: 
+
+Plot_NA = ggplot(combined_sig,
+       aes(x = log2FoldChange,
+           y = Phylum,
+           fill = Comparison)) +
+  geom_vline(xintercept = 0, linetype = "dashed") +
+  geom_col(position = position_dodge(width = 0.7),
+           width = 0.6) +
+  theme_classic()
+
+Plot_NA
+```
+
+```{r}
+library(cowplot)
+
+Plot_A_modified = Plot_A + 
+  theme(legend.position = "none")+ 
+        labs(title = "Andigenum")
+
+Plot_C_modified <- Plot_C + 
+  theme(legend.position = "none")+ 
+        labs(title = "Chiletanum")
+
+Plot_NA_modified <- Plot_NA + 
+  labs(title = "N. American")
+
+
+# Align plots vertically with same width
+aligned_plots <- align_plots(Plot_A_modified,Plot_C_modified,Plot_NA_modified, align = "v", axis = "l", greedy = F)
+
+# Plot grid with equal widths
+plot_Fig3 = plot_grid(plotlist = aligned_plots, 
+          ncol = 3, 
+          nrow = 1,
+          align = "h",
+          rel_heights = c(1, 1, 1))  # Adjust based on number of plots
+plot_Fig3
+
+#ggsave("plot_Fig3.tiff", plot = plot_Fig3, width = 14, height = 5, units = "in", dpi = 300)
+```
+
+
+

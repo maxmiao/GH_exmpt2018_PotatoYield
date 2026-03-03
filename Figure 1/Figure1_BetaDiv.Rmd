@@ -1,0 +1,204 @@
+---
+title: "R Notebook: Generation Figure 1"
+output: html_notebook
+---
+
+
+```{r}
+ps1 = readRDS("/preprocessing/ps1_Clean_02182026.RDS")
+
+
+ps1.clean <- prune_samples(sample_sums(ps1) > 8000, ps1) #We can play around with this...
+```
+
+
+
+```{r}
+run_beta_diversity <- function(ps,
+                               subset_var = NULL,
+                               subset_val = NULL,
+                               method = c("NMDS", "PCoA"),
+                               distance = "bray",
+                               weighted = FALSE,
+                               color = NULL,
+                               shape = NULL,
+                               k = 2,
+                               trymax = 100) {
+
+  library(phyloseq)
+  library(vegan)
+  library(ggplot2)
+
+  method <- match.arg(method)
+
+  # Subset samples if requested
+  if (!is.null(subset_var)) {
+    sd <- as(sample_data(ps), "data.frame")
+    keep <- rownames(sd)[sd[[subset_var]] == subset_val]
+    ps <- prune_samples(keep, ps)
+  }
+
+  # Relative abundance for Bray / weighted UniFrac
+  if (distance %in% c("bray", "wunifrac") || weighted) {
+    ps <- transform_sample_counts(ps, function(x) x / sum(x))
+  }
+
+  # Distance
+  dist <- phyloseq::distance(ps, method = distance, weighted = weighted)
+
+  # Ordination
+  if (method == "NMDS") {
+    ord <- metaMDS(dist, k = k, trymax = trymax, autotransform = FALSE)
+    subtitle <- paste("Stress =", round(ord$stress, 3))
+    ord_plot <- ord
+  } else {
+    ord <- ordinate(ps, "PCoA", dist)
+    subtitle <- NULL
+    ord_plot <- ord
+  }
+
+  # Plot
+  p <- plot_ordination(ps, ord_plot, color = color, shape = shape) +
+    geom_point(size = 3) +
+    theme_bw() +
+    labs(
+      title = paste(method, "of Plant Microbiome"),
+      subtitle = subtitle
+    )
+
+  return(list(
+    plot = p,
+    ordination = ord,
+    distance = dist
+  ))
+}
+```
+
+#Bray-Curtis Distance: 
+
+##Iteration 1: 
+```{r}
+res_nmds <- run_beta_diversity(
+  ps1.clean,
+  subset_var = "Iteration",
+  subset_val = 1,
+  method = "NMDS",
+  distance = "bray",
+  weighted = TRUE,
+  color = "Clade",
+  shape = "Clade"
+)
+
+res_nmds$plot
+
+```
+
+
+#Iteration 3
+```{r}
+res_nmds <- run_beta_diversity(
+  ps1.clean,
+  subset_var = "Iteration",
+  subset_val = 3,
+  method = "NMDS",
+  distance = "bray",
+  weighted = TRUE,
+  color = "Clade",
+  shape = "Clade"
+)
+
+res_nmds$plot
+```
+
+
+#Iteration 5
+```{r}
+res_nmds <- run_beta_diversity(
+  ps1.clean,
+  subset_var = "Iteration",
+  subset_val = 5,
+  method = "NMDS",
+  distance = "bray",
+  weighted = TRUE,
+  color = "Clade",
+  shape = "Clade"
+)
+
+res_nmds$plot
+```
+
+
+#UniFRAC distance: 
+
+##Iteration 1
+```{r}
+res_nmds <- run_beta_diversity(
+  ps1.clean,
+  subset_var = "Iteration",
+  subset_val = 1,
+  method = "NMDS",
+  distance = "unifrac",
+  weighted = TRUE,
+  color = "Clade",
+  shape = "Clade"
+)
+
+plot_i1 = res_nmds$plot
+plot_i1
+```
+
+
+```{r}
+res_nmds <- run_beta_diversity(
+  ps1.clean,
+  subset_var = "Iteration",
+  subset_val = 3,
+  method = "NMDS",
+  distance = "unifrac",
+  weighted = TRUE,
+  color = "Clade",
+  shape = "Clade"
+)
+
+plot_i3 = res_nmds$plot
+plot_i3
+```
+
+
+
+```{r}
+res_nmds <- run_beta_diversity(
+  ps1.clean,
+  subset_var = "Iteration",
+  subset_val = 5,
+  method = "NMDS",
+  distance = "unifrac",
+  weighted = TRUE,
+  color = "Clade",
+  shape = "Clade"
+)
+
+plot_i5 = res_nmds$plot
+plot_i5
+```
+
+
+```{r}
+library(cowplot)
+
+plot_i1_modified = plot_i1 + theme(legend.position = "none",       # remove legend
+        plot.title = element_blank())
+
+plot_i3_modified = plot_i3 + theme(legend.position = "none",       # remove legend
+        plot.title = element_blank())
+
+plot_i5_modified = plot_i5 + theme(plot.title = element_blank())
+
+combined_plot <- plot_grid(plot_i1_modified, plot_i3_modified, plot_i5_modified, labels = c("A", "B", "C"), ncol = 3)
+combined_plot
+```
+
+```{r}
+#ggsave("NMDS_grid.pdf", combined_plot, width = 12, height = 4)
+```
+

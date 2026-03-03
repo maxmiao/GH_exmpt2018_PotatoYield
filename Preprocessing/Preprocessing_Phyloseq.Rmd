@@ -1,0 +1,278 @@
+---
+title: "Phyloseq_artifact_generation and Quality_Control 02122026"
+output: html_notebook
+---
+
+## Formatting output from DADA2 in Qiime2 pipeline for Phyloseq 
+
+```{r}
+library(reshape)
+library(plyr)
+library(dplyr)
+library(dplyr)
+library(tidyr)
+library(tidyverse)
+library(reshape2)
+library(ggpubr)
+library(phyloseq)
+library(here)
+```
+
+
+```{r}
+# -----------------------------
+# 1. Read taxonomy table
+# -----------------------------
+
+tax <- read.delim(
+  file.path(base_dir, "taxonomy", "taxonomy.tsv"),
+  sep = "\t",
+  header = TRUE,
+  stringsAsFactors = FALSE
+)
+
+tax_split <- tax %>%
+  separate(
+    Taxon,
+    into = c("Kingdom","Phylum","Class","Order","Family","Genus","Species"),
+    sep = ";",
+    fill = "right"
+  ) %>%
+  mutate(across(Kingdom:Species, ~gsub("^.*__", "", .))) %>%
+  column_to_rownames("Feature.ID") %>%
+  select(Kingdom:Species)
+
+
+tax_table_ps <- tax_table(as.matrix(tax_split))
+```
+
+
+```{r}
+# -----------------------------
+# 2. Read OTU / ASV table
+# -----------------------------
+
+library(ape)
+library(biomformat)
+
+# --- 2️⃣ Read BIOM file manually ---
+biom_path <- "/Users/maxmiao/Library/CloudStorage/Box-Box/Lankau_Lab/Ch4_Greenhouse_Exmpt_2018/qiime2_16S/16S_02122026/table/feature-table.biom"
+biom_file <- read_biom(biom_path)
+
+# Convert to matrix
+otu_mat <- as(biom_data(biom_file), "matrix")
+
+# Ensure numeric (QIIME2 sometimes exports float or characters)
+mode(otu_mat) <- "numeric"
+
+# Convert to phyloseq OTU table
+otu_table_ps <- otu_table(otu_mat, taxa_are_rows = TRUE)
+
+# Quick check
+otu_table_ps[1:5, 1:5]
+
+```
+
+
+```{r}
+# -----------------------------
+# 3. Read sample metadata
+# -----------------------------
+meta_df <- read_csv("metadata3.csv")
+
+
+meta <- meta_df %>%
+  column_to_rownames("Submission_ID") %>%
+  sample_data()
+```
+
+
+```{r}
+# -----------------------------
+# 4. Read phylogeny tree
+# -----------------------------
+tree <- read_tree(
+  file.path(base_dir, "tree", "tree.nwk")
+)
+
+phy_tree_ps <- phy_tree(tree)
+is.rooted(phy_tree_ps)
+```
+
+
+##Generate as Phyloseq object: 
+
+```{r}
+ps <- merge_phyloseq(
+  otu_table_ps,
+  tax_table_ps,
+  meta,
+  phy_tree_ps
+)
+
+ps
+
+```
+
+
+##Quality Control(s)
+
+```{r}
+ps_clean <- ps %>%
+  subset_taxa(
+    !Family %in% c("Mitochondria", "Chloroplast") &
+    !Order  %in% c("Mitochondria", "Chloroplast")
+  )
+
+# Convert Family and Order to lower case for consistent filtering
+ps_clean <- subset_taxa(
+  ps_clean,
+  !tolower(Family) %in% c("mitochondria", "chloroplast") &
+  !tolower(Order)  %in% c("mitochondria", "chloroplast")
+)
+ps1_prune <- prune_samples(reads >= 8000, ps_clean)
+
+#Export for alpha diversity analysis: 
+#saveRDS(ps_clean,"ps1_AlphaDiv_02182026.RDS") #Use for Alpha Diversity
+
+```
+
+
+```{r}
+# Apple 0.25% threshold (for beta diversity)
+ps_relabund <- transform_sample_counts(ps_clean, function(x) x / sum(x))
+keep_taxa <- taxa_names(ps_relabund)[apply(otu_table(ps_relabund), 1, function(x) any(x > 0.0025))]
+ps_filtered <- prune_taxa(keep_taxa, ps_clean)
+
+# Drop Zero abundance taxa (for beta diversity)
+ps_filtered <- prune_taxa(taxa_sums(ps_filtered) > 0, ps_filtered)
+```
+
+
+```{r}
+#saveRDS(ps_filtered,"ps1_filtered_02182026.RDS") #Use for Beta_diversity
+```
+
+
+#Quality Control for DESeq2:
+```{r}
+# ===========================
+# 1. Remove singletons (ASVs in only 1 sample)
+# ===========================
+physeq_filtered <- filter_taxa(ps_clean, function(x) sum(x > 0) > 1, TRUE)
+
+# ===========================
+# 2. Apply prevalence filter
+#    Keep ASVs present in at least 10% of samples
+# ===========================
+prevalenceThreshold <- 0.1
+sampleCountThreshold <- prevalenceThreshold * nsamples(physeq_filtered)
+physeq_filtered <- filter_taxa(physeq_filtered, function(x) sum(x > 0) >= sampleCountThreshold, TRUE)
+
+# ===========================
+# 3. Apply relative abundance filter
+#    Keep ASVs that make up >0.25% of total reads in any sample
+# ===========================
+abundanceThreshold <- 0.0025
+physeq_filtered <- filter_taxa(physeq_filtered, function(x) any(x / sum(x) > abundanceThreshold), TRUE)
+
+#saveRDS(physeq_filtered,"ps1_DESeq2_02232026.RDS") #Use for DESEQ2 analysis
+
+```
+
+
+
+Check read counts: 
+```{r}
+library(data.table)
+ps1 = readRDS("ps1_filtered_02182026.RDS")
+
+readcount = data.table(as(sample_data(ps1), "data.frame"),
+                 TotalReads = sample_sums(ps1), 
+                 keep.rownames = TRUE)
+setnames(readcount, "rn", "Submission_ID")
+ggplot(readcount, aes(TotalReads)) + geom_histogram() + ggtitle("Sequencing Depth")
+```
+As we can see we have lots of samples that have not many reads...we need to find a good cutoff. We will now generate a rarefraction plot 
+
+
+
+
+```{r}
+#First need to remove samples with zero reads:
+ps1.clean <- prune_samples(sample_sums(ps1) > 0, ps1)
+
+readcount = data.table(as(sample_data(ps1.clean), "data.frame"),
+                 TotalReads = sample_sums(ps1.clean), 
+                 keep.rownames = TRUE)
+setnames(readcount, "rn", "Submission_ID")
+ggplot(readcount, aes(TotalReads)) + geom_histogram() + ggtitle("Sequencing Depth")
+```
+
+
+So it turns out we need to do more
+```{r}
+library(phyloseq)
+
+rarecurve(
+  t(otu_table(ps1.clean)),
+  step = 100,
+  sample = min(sample_sums(ps1.clean)),
+  col = "grey",
+  label = FALSE
+)
+
+
+```
+
+#Diagnosing issue related to rarefraction: 
+```{r}
+otu_mat <- as(otu_table(ps1), "matrix")
+if (taxa_are_rows(ps1)) otu_mat <- t(otu_mat)
+```
+
+
+```{r}
+rowSums(otu_mat == 0)
+rowSums(otu_mat > 0)
+rowSums(otu_mat)
+```
+
+
+```{r}
+bad_samples <- rownames(otu_mat)[rowSums(otu_mat > 0) < 2]
+bad_samples
+```
+
+
+```{r}
+ps1_clean <- prune_samples(
+  sample_names(ps1) %in% setdiff(sample_names(ps1), bad_samples),
+  ps1
+)
+```
+
+
+```{r}
+otu_mat <- as(otu_table(ps1_clean), "matrix")
+if (taxa_are_rows(ps1_clean)) otu_mat <- t(otu_mat)
+
+rarecurve(
+  otu_mat,
+  step   = 100,
+  sample = min(rowSums(otu_mat)),
+  col    = "grey",
+  label  = FALSE
+)
+```
+So based on this; our cutoff will be 8000 for downstream analysis 
+
+```{r}
+ps1_filt <- prune_samples(reads >= 8000, ps1)
+```
+Notice that it originally had 356 we have 224 left.  
+
+```{r}
+#saveRDS(ps1_filt,"ps1_Clean_02182026.RDS")
+```
+
