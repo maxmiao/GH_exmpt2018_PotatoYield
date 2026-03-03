@@ -74,61 +74,8 @@ run_beta_diversity <- function(ps,
 }
 ```
 
-#Bray-Curtis Distance: 
-
-##Iteration 1: 
-```{r}
-res_nmds <- run_beta_diversity(
-  ps1.clean,
-  subset_var = "Iteration",
-  subset_val = 1,
-  method = "NMDS",
-  distance = "bray",
-  weighted = TRUE,
-  color = "Clade",
-  shape = "Clade"
-)
-
-res_nmds$plot
-
-```
-
-
-#Iteration 3
-```{r}
-res_nmds <- run_beta_diversity(
-  ps1.clean,
-  subset_var = "Iteration",
-  subset_val = 3,
-  method = "NMDS",
-  distance = "bray",
-  weighted = TRUE,
-  color = "Clade",
-  shape = "Clade"
-)
-
-res_nmds$plot
-```
-
-
-#Iteration 5
-```{r}
-res_nmds <- run_beta_diversity(
-  ps1.clean,
-  subset_var = "Iteration",
-  subset_val = 5,
-  method = "NMDS",
-  distance = "bray",
-  weighted = TRUE,
-  color = "Clade",
-  shape = "Clade"
-)
-
-res_nmds$plot
-```
-
-
-#UniFRAC distance: 
+##Generate NMDS plot
+based on UniFRAC distance: 
 
 ##Iteration 1
 ```{r}
@@ -147,7 +94,7 @@ plot_i1 = res_nmds$plot
 plot_i1
 ```
 
-
+##Iteration 3
 ```{r}
 res_nmds <- run_beta_diversity(
   ps1.clean,
@@ -165,7 +112,7 @@ plot_i3
 ```
 
 
-
+##Iteration 5
 ```{r}
 res_nmds <- run_beta_diversity(
   ps1.clean,
