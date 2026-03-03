@@ -1,7 +1,7 @@
 # Title of Manuscript (TBD)
 
 ## Authors
-Max Miao et al.
+Max Miao and Richard Lankau.
 
 ## Overview
 This repository contains all scripts used to generate figures and analyses.
