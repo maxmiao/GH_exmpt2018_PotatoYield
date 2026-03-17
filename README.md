@@ -17,4 +17,5 @@ Raw sequencing data available at NCBI SRA under accession XXXX.
 5) Figure 3: DESeq Differential analysis across time
 6) Figure 4: DESeq Differential analysis between timepoint and potato clade
 7) Figure 5: Relative abundance
-8) Figure 6 and 7: Plant Soil Feedback results
+8) Figure 6: Plant Soil Feedback results
+9) Figure 7: Soil Swapping Plant response results
