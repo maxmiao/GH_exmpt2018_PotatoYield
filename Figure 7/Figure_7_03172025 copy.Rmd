@@ -1,0 +1,295 @@
+---
+title: "R Notebook"
+output:
+  html_notebook: default
+  pdf_document: default
+---
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Cmd+Shift+Enter*. 
+
+```{r}
+library(reshape)
+library(ggplot2)
+library(nlme)
+library(lme4)
+library(lmerTest)
+library(tidyverse)
+library(plotrix)
+library(emmeans)
+library(cowplot)
+```
+
+```{r}
+metadata <- read.csv(file = "GH_2018_metadata_V4.csv", header = T)
+#Added a Total_veg column to account to total biomass without tubers. 
+
+metadata$Total = as.numeric(metadata$Total)
+metadata$Roots = as.numeric(metadata$Roots)
+metadata1 <- subset(metadata, Shoots >= 0 & Roots >= 0)
+```
+
+
+#Approach 1: Cross sectional analysis of biomass for each generation: 
+
+##Tubers
+
+Defining functions for analysis b/c its gonna get repetitive: 
+```{r}
+metadata_tuber <- subset(metadata, Tuber_Mass != "NA")
+
+#Iteration 1 (No conditioning): 
+metadata_tuber1 = subset(metadata_tuber, Iteration == 1)
+lm_tuber1 = lmer(Tuber_Mass ~ LiveSoil * Clade * (1|Genotype), data = metadata_tuber1)
+summary(lm_tuber1)
+anova(lm_tuber1)
+
+```
+
+```{r}
+plot_tuber1 = emmip(lm_tuber1, Clade ~ LiveSoil, at = list(Clade = c("A","C","M"), LiveSoil = c("N","Y")), dodge = 0.1)
+plot_tuber1
+
+df_tuber1 = as.data.frame(plot_tuber1$data)
+```
+
+
+
+```{r}
+#Iteration 3: 
+metadata_tuber3 = subset(metadata_tuber, Iteration == 3)
+lm_tuber3 = lmer(Tuber_Mass ~ LiveSoil * Clade * (1|Genotype), data = metadata_tuber3)
+summary(lm_tuber3)
+anova(lm_tuber3)
+
+contrast(emmeans(lm_tuber3, ~ LiveSoil * Clade), interaction = "pairwise")
+plot_tuber3 = emmip(lm_tuber3, Clade ~ LiveSoil, at = list(Clade = c("A","C","M"), LiveSoil = c("N","Y")), dodge = 0.1)
+plot_tuber3
+
+df_tuber3 = as.data.frame(plot_tuber3$data)
+
+```
+
+
+
+```{r}
+#Iteration 5:
+metadata_tuber5 = subset(metadata_tuber, Iteration == 5)
+lm_tuber5 = lmer(Tuber_Mass ~ LiveSoil * Clade * (1|Genotype), data = metadata_tuber5)
+summary(lm_tuber5)
+anova(lm_tuber5)
+```
+
+
+```{r}
+contrast(emmeans(lm_tuber5, ~ LiveSoil * Clade), interaction = "pairwise")
+plot_tuber5 = emmip(lm_tuber5, Clade ~ LiveSoil, at = list(Clade = c("A","C","M"), LiveSoil = c("N","Y")), dodge = 0.1)
+plot_tuber5
+
+df_tuber5 = as.data.frame(plot_tuber5$data)
+
+```
+
+
+```{r}
+plot_grid(plot_tuber1,plot_tuber3,plot_tuber5, nrow = 1, labels=c('D','E','F'))
+```
+
+***
+
+##Shoots/Vegatative biomass
+
+```{r}
+metadata_Shoots1 = subset(metadata1, Iteration == 1)
+lm_shoots1 = lmer(Total_Veg ~ LiveSoil * Clade * (1|Genotype), data = metadata_Shoots1)
+summary(lm_shoots1)
+anova(lm_shoots1)
+```
+
+
+```{r}
+contrast(emmeans(lm_shoots1, ~ LiveSoil * Clade), interaction = "pairwise")
+plot_shoots_i1 = emmip(lm_shoots1, Clade ~ LiveSoil, at = list(Clade = c("A","C","M"), LiveSoil = c("N","Y")), dodge = 0.1)
+plot_shoots_i1
+df_shoots_i1 = as.data.frame(plot_shoots_i1$data)
+```
+
+
+
+```{r}
+#Iteration 3
+
+metadata_Shoots3 = subset(metadata1, Iteration == 3)
+lm_shoots3 = lmer(Total_Veg ~ LiveSoil * Clade * (1|Genotype), data = metadata_Shoots3)
+summary(lm_shoots3)
+anova(lm_shoots3)
+
+```
+
+
+```{r}
+contrast(emmeans(lm_shoots3, ~ LiveSoil * Clade), interaction = "pairwise")
+plot_shoots_i3 = emmip(lm_shoots3, Clade ~ LiveSoil, at = list(Clade = c("A","C","M"), LiveSoil = c("N","Y")), dodge = 0.1)
+plot_shoots_i3
+df_shoots_i3 = as.data.frame(plot_shoots_i3$data)
+```
+
+
+
+```{r}
+#Iteration 5
+metadata_Shoots5 = subset(metadata1, Iteration == 5)
+lm_shoots5 = lmer(Total_Veg ~ LiveSoil * Clade * (1|Genotype), data = metadata_Shoots5)
+summary(lm_shoots5)
+anova(lm_shoots5)
+```
+
+```{r}
+contrast(emmeans(lm_shoots5, ~ LiveSoil * Clade), interaction = "pairwise")
+plot_shoots_i5 = emmip(lm_shoots5, Clade ~ LiveSoil, at = list(Clade = c("A","C","M"), LiveSoil = c("N","Y")), dodge = 0.1)
+plot_shoots_i5
+df_shoots_i5 = as.data.frame(plot_shoots_i5$data)
+```
+
+***
+
+
+```{r}
+df_shoots_i1 = mutate(df_shoots_i1, Iteration = 1)
+df_shoots_i3 = mutate(df_shoots_i3, Iteration = 3)
+df_shoots_i5 = mutate(df_shoots_i5, Iteration = 5)
+
+df_shoots_PLOT = rbind(df_shoots_i1,df_shoots_i3, df_shoots_i5)
+df_shoots_PLOT$Iteration = as.factor(df_shoots_PLOT$Iteration)
+
+```
+
+
+```{r}
+df_shoots_A = subset(df_shoots_PLOT, Clade == "A")
+
+plot_Andigenum  = ggplot(df_shoots_A, aes(x = Iteration, y = yvar))+
+  geom_hline(yintercept = 0)+
+  geom_col(position = "dodge2", aes(fill = LiveSoil))+
+  geom_errorbar(aes(ymin = yvar - SE, ymax = yvar + SE), position = "dodge2")+
+  labs(y = "Biomass (g)")+
+  ylim(0,25)+
+  scale_fill_discrete(name = "Live vs Sterile Soil")+
+  theme_bw()+
+  theme(legend.position = "none")
+
+plot_Andigenum
+```
+
+```{r}
+df_shoots_C = subset(df_shoots_PLOT, Clade == "C")
+
+plot_Chiletanum  = ggplot(df_shoots_C, aes(x = Iteration, y = yvar))+
+  geom_hline(yintercept = 0)+
+  geom_col(position = "dodge2", aes(fill = LiveSoil))+
+  geom_errorbar(aes(ymin = yvar - SE, ymax = yvar + SE), position = "dodge2")+
+  labs(y = "Biomass (g)")+
+  ylim(0,25)+
+  scale_fill_discrete(name = "Live vs Sterile Soil")+
+  theme_bw()+
+  theme(legend.position = "none")
+
+plot_Chiletanum
+```
+
+
+```{r}
+df_shoots_NA = subset(df_shoots_PLOT, Clade == "M")
+
+plot_NorAm  = ggplot(df_shoots_NA, aes(x = Iteration, y = yvar))+
+  geom_hline(yintercept = 0)+
+  geom_col(position = "dodge2", aes(fill = LiveSoil))+
+  geom_errorbar(aes(ymin = yvar - SE, ymax = yvar + SE), position = "dodge2")+
+  labs(y = "Biomass (g)")+
+  ylim(0,25)+
+  scale_fill_discrete(name = "Live vs Sterile Soil")+
+  theme_bw()+
+  theme(legend.position = "none")
+
+plot_NorAm
+```
+
+
+#Figure 7 Pt1
+```{r}
+library(cowplot)
+plot_grid(plot_Andigenum,plot_Chiletanum,plot_NorAm, labels=c('A','B','C'), nrow = 1)
+```
+
+
+***
+
+Now let's try with Tubermass: 
+
+```{r}
+df_tuber1 = mutate(df_tuber1, Iteration = 1)
+df_tuber3 = mutate(df_tuber3, Iteration = 3)
+df_tuber5 = mutate(df_tuber5, Iteration = 5)
+
+df_tubers_PLOT = rbind(df_tuber1,df_tuber3, df_tuber5)
+df_tubers_PLOT$Iteration = as.factor(df_tubers_PLOT$Iteration)
+```
+
+
+```{r}
+df_tubers_A = subset(df_tubers_PLOT, Clade == "A")
+
+plot_tubers_Andigenum  = ggplot(df_tubers_A, aes(x = Iteration, y = yvar))+
+  geom_hline(yintercept = 0)+
+  geom_col(position = "dodge2", aes(fill = LiveSoil))+
+  geom_errorbar(aes(ymin = yvar - SE, ymax = yvar + SE), position = "dodge2")+
+  labs(y = "Biomass (g)")+
+  ylim(-10,45)+
+  scale_fill_discrete(name = "Live vs Sterile Soil")+
+  theme_bw()+
+  theme(legend.position = "none")
+
+plot_tubers_Andigenum
+```
+
+
+```{r}
+df_tubers_C = subset(df_tubers_PLOT, Clade == "C")
+
+plot_tubers_Chiletanum  = ggplot(df_tubers_C, aes(x = Iteration, y = yvar))+
+  geom_hline(yintercept = 0)+
+  geom_col(position = "dodge2", aes(fill = LiveSoil))+
+  geom_errorbar(aes(ymin = yvar - SE, ymax = yvar + SE), position = "dodge2")+
+  labs(y = "Biomass (g)")+
+  ylim(-10,45)+
+  scale_fill_discrete(name = "Live vs Sterile Soil")+
+  theme_bw()+
+  theme(legend.position = "none")
+
+plot_tubers_Chiletanum
+```
+
+```{r}
+df_tubers_NA = subset(df_tubers_PLOT, Clade == "M")
+
+plot_tubers_NorAm  = ggplot(df_tubers_NA, aes(x = Iteration, y = yvar))+
+  geom_hline(yintercept = 0)+
+  geom_col(position = "dodge2", aes(fill = LiveSoil))+
+  geom_errorbar(aes(ymin = yvar - SE, ymax = yvar + SE), position = "dodge2")+
+  labs(y = "Biomass (g)")+
+  ylim(-10,45)+
+  scale_fill_discrete(name = "Live vs Sterile Soil")+
+  theme_bw()+
+  theme(legend.position = "none")
+
+plot_tubers_NorAm
+```
+
+#Figure 7 Pt2: 
+
+```{r}
+library(cowplot)
+plot_grid(plot_tubers_Andigenum,plot_tubers_Chiletanum,plot_tubers_NorAm, labels=c('D','E','F'), nrow = 1)
+```
+

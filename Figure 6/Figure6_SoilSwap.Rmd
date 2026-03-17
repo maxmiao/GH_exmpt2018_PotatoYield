@@ -1,0 +1,112 @@
+---
+title: "Figure 9C and 9D: Between Clades and legacy type after soil swapping"
+output: html_notebook
+---
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Cmd+Shift+Enter*. 
+
+```{r}
+library(ggplot2)
+library(emmeans)
+library(lme4)
+library(lmerTest)
+library(tidyverse)
+library(reshape2)
+library(tidyr)
+library(plotrix)
+library(ggpubr)
+library(boot)
+```
+
+
+```{r}
+data = read.csv(file = 'Gh25_expmt_2020_edited.csv',header = T, sep = ",")
+data1 = subset(data, AG_biomass > 0 & UG_biomass > 0 )
+data1$Legacy = as.factor(data1$Legacy)
+data1$Clade = as.factor(data1$Clade)
+data1$tubermass = as.numeric(data1$tubermass)
+data1$AG_biomass = as.numeric(data1$AG_biomass)
+data1$UG_biomass = as.numeric(data1$UG_biomass)
+```
+
+
+```{r}
+model_lm = lmer(total_veg ~ Legacy * Clade + (1|Genotype), data = data1)
+sum_veg = summary(model_lm)
+sum_veg
+aov_veg = anova(model_lm)
+aov_veg
+
+```
+
+
+```{r}
+em_shoots = contrast(emmeans(model_lm, ~ Legacy), interaction = "pairwise")
+em_shoots
+```
+
+Contrasts:
+Now we want to do contrasts within each clade and compare to sterile. 
+```{r}
+data_Chil = subset(data1, Clade == "Chiletanum")
+model_lmC = lmer(total_veg ~ Legacy + (1|Genotype), data = data_Chil)
+sum_veg = summary(model_lmC)
+sum_veg
+aov_veg = anova(model_lmC)
+aov_veg
+em_shoots = contrast(emmeans(model_lmC, ~ Legacy), interaction = "pairwise")
+em_shoots
+```
+We see that Chiletanum post swapping performed significantly better in modern soils than in sterile soils. Moreover, Chiletanum growing in sterile soils just performed worse overall than with any sort of live soil... 
+
+```{r}
+plot_veg = emmip(model_lm, Clade ~ Legacy, at = list(Clade = c("Andigenum","Chiletanum","Modern"), Legacy = c("Andigenum","Chiletanum","Modern","Sterile")), dodge = 0.1)
+plot_veg
+
+df_veg = as.data.frame(plot_veg$data)
+plot_total = ggplot(df_veg, aes(x = Clade, y = yvar))+
+  geom_hline(yintercept = 0)+
+  geom_col(position = "dodge2", aes(fill = Legacy))+
+  geom_errorbar(aes(ymin = yvar - SE, ymax = yvar + SE), position = position_dodge2(width = 0.25, padding = 0.5))+
+  labs(y = "biomass (g)")+
+  scale_fill_discrete(name = "Legacy Soil Type")+
+  theme_bw()+
+  theme(legend.position = "none")
+plot_total
+```
+
+##Tubers: 
+```{r}
+data_tuber = subset(data, tubermass >= 0 & tubermass != "NA")
+model_lm = lmer(tubermass ~ Legacy * Clade + (1|Genotype), data = data_tuber)
+sum_veg = summary(model_lm)
+sum_veg
+aov_veg = anova(model_lm)
+aov_veg
+```
+
+
+```{r}
+plot_tubers = emmip(model_lm, Clade ~ Legacy, at = list(Clade = c("Andigenum","Chiletanum","Modern"), Legacy = c("Andigenum","Chiletanum","Modern","Sterile")), dodge = 0.1)
+plot_tubers
+
+df_tubers = as.data.frame(plot_tubers$data)
+plot_tubers = ggplot(df_tubers, aes(x = Clade, y = yvar))+
+  geom_hline(yintercept = 0)+
+  geom_col(position = "dodge2", aes(fill = Legacy))+
+  geom_errorbar(aes(ymin = yvar - SE, ymax = yvar + SE), position = position_dodge2(width = 0.25, padding = 0.5))+
+  labs(y = "biomass (g)")+
+  scale_fill_discrete(name = "Legacy Soil Type")+
+  theme_bw()+
+  theme(legend.position = "none")
+plot_tubers
+```
+
+
+```{r}
+library(cowplot)
+plot_grid(plot_tubers,plot_total, labels = c("A","B"), nrow = 1)
+```
+

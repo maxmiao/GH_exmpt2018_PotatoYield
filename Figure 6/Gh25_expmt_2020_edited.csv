@@ -1,0 +1,101 @@
+﻿Genotype,Species,Clade,Soil,Legacy,Specificity ,LiveSoil,Trt,ID,Initial_weight,tubermass,AG_biomass,UG_biomass,total_veg
+Huagalina,Potato,Andigenum,Huagalina,Andigenum,con,Y,A-A,93,n/a,,,2.22,2.22
+Huagalina,Potato,Andigenum,Wac5,Andigenum,con,Y,A-A,75,n/a,,,,0
+Huagalina,Potato,Andigenum,Wac663,Andigenum,con,Y,A-A,79,n/a,22.8,8.7,1.27,9.97
+Wac5,Potato,Andigenum,Huagalina,Andigenum,con,Y,A-A,83,n/a,17.53,6.19,0.63,6.82
+Wac5,Potato,Andigenum,Wac5,Andigenum,con,Y,A-A,47,n/a,32.1,4.29,0.29,4.58
+Wac5,Potato,Andigenum,Wac663,Andigenum,con,Y,A-A,81,n/a,12.2,5.14,0.21,5.35
+Wac663,Potato,Andigenum,Huagalina,Andigenum,con,Y,A-A,45,n/a,,,0.41,0.41
+Wac663,Potato,Andigenum,Wac5,Andigenum,con,Y,A-A,4,n/a,,,,0
+Wac663,Potato,Andigenum,Wac663,Andigenum,con,Y,A-A,7,n/a,0,8.48,0.41,8.89
+Huagalina,Potato,Andigenum,Cor.C.95(B),Chiletanum,hetero,Y,A-C,53,n/a,17.67,8.55,1.09,9.64
+Huagalina,Potato,Andigenum,Papa Cacho (B),Chiletanum,hetero,Y,A-C,95,n/a,66.66,10.19,1.39,11.58
+Wac5,Potato,Andigenum,Cor.C.95(B),Chiletanum,hetero,Y,A-C,42,n/a,17.11,8.85,0.57,9.42
+Wac5,Potato,Andigenum,Papa Cacho (B),Chiletanum,hetero,Y,A-C,58,n/a,15.4,3.03,0.72,3.75
+Wac663,Potato,Andigenum,Cor.C.95(B),Chiletanum,hetero,Y,A-C,59,n/a,,,0.48,0.48
+Wac663,Potato,Andigenum,Papa Cacho (B),Chiletanum,hetero,Y,A-C,24,n/a,4.48,6.89,0.24,7.13
+Wac5,Potato,Andigenum,Burbank (B),Modern,hetero,Y,A-M,49,n/a,62.27,7.16,0.49,7.65
+Wac5,Potato,Andigenum,G.Chili,Modern,hetero,Y,A-M,28,n/a,0,6.51,0.34,6.85
+Wac5,Potato,Andigenum,Ranger (B),Modern,hetero,Y,A-M,87,n/a,1.36,13.67,1.08,14.75
+Wac5,Potato,Andigenum,Snowden (B),Modern,hetero,Y,A-M,8,n/a,4.9,8.58,0.47,9.05
+Huagalina,Potato,Andigenum,Burbank (B),Modern,hetero,Y,A-M,46,n/a,12.2,11.52,1.18,12.7
+Huagalina,Potato,Andigenum,G.Chili,Modern,hetero,Y,A-M,65,n/a,7.81,11.66,0.16,11.82
+Huagalina,Potato,Andigenum,Ranger (B),Modern,hetero,Y,A-M,97,n/a,,,,0
+Huagalina,Potato,Andigenum,Snowden (B),Modern,hetero,Y,A-M,60,n/a,,,,0
+Wac663,Potato,Andigenum,Burbank (B),Modern,hetero,Y,A-M,66,n/a,1.71,8.26,0.73,8.99
+Wac663,Potato,Andigenum,G.Chili,Modern,hetero,Y,A-M,63,n/a,0.55,6.23,0.22,6.45
+Wac663,Potato,Andigenum,Ranger (B),Modern,hetero,Y,A-M,44,n/a,0,1.67,0.01,1.68
+Wac663,Potato,Andigenum,Snowden (B),Modern,hetero,Y,A-M,86,n/a,21.18,6.31,0.35,6.66
+Huagalina,Potato,Andigenum,Sterile,Sterile,Sterile,N,A-S,92,n/a,,,,0
+Wac5,Potato,Andigenum,Sterile,Sterile,Sterile,N,A-S,74,n/a,1.25,7.56,0.73,8.29
+Wac663,Potato,Andigenum,Sterile,Sterile,Sterile,N,A-S,6,n/a,3.58,10.88,0.4,11.28
+Cor.C.56,Potato,Chiletanum,Huagalina,Andigenum,hetero,Y,C-A,70,n/a,40.89,9.06,1.74,10.8
+Cor.C.56,Potato,Chiletanum,Wac5,Andigenum,hetero,Y,C-A,67,n/a,73.28,8.96,2.01,10.97
+Cor.C.56,Potato,Chiletanum,Wac663,Andigenum,hetero,Y,C-A,69,n/a,,,,0
+Cor.C.95,Potato,Chiletanum,Huagalina,Andigenum,hetero,Y,C-A,99,n/a,,,,0
+Cor.C.95,Potato,Chiletanum,Wac5,Andigenum,hetero,Y,C-A,56,n/a,32.61,8.42,4.33,12.75
+Cor.C.95,Potato,Chiletanum,Wac663,Andigenum,hetero,Y,C-A,54,n/a,26.3,7.51,1.35,8.86
+Papa Cacho ,Potato,Chiletanum,Huagalina,Andigenum,hetero,Y,C-A,16,n/a,62.46,2.11,0.15,2.26
+Papa Cacho ,Potato,Chiletanum,Wac5,Andigenum,hetero,Y,C-A,26,n/a,122.73,,0.22,0.22
+Papa Cacho ,Potato,Chiletanum,Wac663,Andigenum,hetero,Y,C-A,82,n/a,,,,0
+Cor.C.56,Potato,Chiletanum,Cor.C.95(B),Chiletanum,con,Y,C-C,2,n/a,,15.97,0.53,16.5
+Cor.C.56,Potato,Chiletanum,Papa Cacho (B),Chiletanum,con,Y,C-C,98,n/a,,,2.45,2.45
+Cor.C.95,Potato,Chiletanum,Cor.C.95(B),Chiletanum,con,Y,C-C,20,n/a,38.22,3.29,0.18,3.47
+Cor.C.95,Potato,Chiletanum,Papa Cacho (B),Chiletanum,con,Y,C-C,33,n/a,19.32,6.33,1.21,7.54
+Papa Cacho ,Potato,Chiletanum,Cor.C.95(B),Chiletanum,con,Y,C-C,36,n/a,69.32,5.33,0.39,5.72
+Papa Cacho ,Potato,Chiletanum,Papa Cacho (B),Chiletanum,con,Y,C-C,57,n/a,46.85,1.9,0.14,2.04
+Cor.C.56,Potato,Chiletanum,Burbank (B),Modern,hetero,Y,C-M,34,n/a,34.93,17.75,3.54,21.29
+Cor.C.56,Potato,Chiletanum,G.Chili,Modern,hetero,Y,C-M,90,n/a,1.44,18.76,2.22,20.98
+Cor.C.56,Potato,Chiletanum,Ranger (B),Modern,hetero,Y,C-M,22,n/a,12.84,8.21,12.82,21.03
+Cor.C.56,Potato,Chiletanum,Snowden (B),Modern,hetero,Y,C-M,5,n/a,,,,0
+Cor.C.95,Potato,Chiletanum,Burbank (B),Modern,hetero,Y,C-M,27,n/a,10.4,3.95,0.1,4.05
+Cor.C.95,Potato,Chiletanum,G.Chili,Modern,hetero,Y,C-M,40,n/a,82.23,12.4,2.43,14.83
+Cor.C.95,Potato,Chiletanum,Ranger (B),Modern,hetero,Y,C-M,91,n/a,18.85,,,0
+Cor.C.95,Potato,Chiletanum,Snowden (B),Modern,hetero,Y,C-M,50,n/a,,0.57,0.33,0.9
+Papa Cacho ,Potato,Chiletanum,Burbank (B),Modern,hetero,Y,C-M,37,n/a,105.83,6.65,0.67,7.32
+Papa Cacho ,Potato,Chiletanum,G.Chili,Modern,hetero,Y,C-M,9,n/a,15.57,9.18,0.41,9.59
+Papa Cacho ,Potato,Chiletanum,Ranger (B),Modern,hetero,Y,C-M,21,n/a,68.29,1.84,0.15,1.99
+Papa Cacho ,Potato,Chiletanum,Snowden (B),Modern,hetero,Y,C-M,17,n/a,,,,0
+Cor.C.56,Potato,Chiletanum,Sterile,Sterile,Sterile,N,C-S,14,n/a,25.11,4.55,1.78,6.33
+Cor.C.95,Potato,Chiletanum,Sterile,Sterile,Sterile,N,C-S,32,n/a,17.03,1,0.14,1.14
+Papa Cacho ,Potato,Chiletanum,Sterile,Sterile,Sterile,N,C-S,89,n/a,95.75,2.36,0.45,2.81
+Burbank,Potato,Modern,Huagalina,Andigenum,hetero,Y,M-A,19,50.6,,,,0
+Burbank,Potato,Modern,Wac5,Andigenum,hetero,Y,M-A,68,50.57,,4.45,,4.45
+Burbank,Potato,Modern,Wac663,Andigenum,hetero,Y,M-A,64,49.25,113.5,3.76,0.66,4.42
+G.Chili,Potato,Modern,Huagalina,Andigenum,hetero,Y,M-A,78,n/a,101.75,11.13,0.89,12.02
+G.Chili,Potato,Modern,Wac5,Andigenum,hetero,Y,M-A,3,n/a,65.96,4.61,0.27,4.88
+G.Chili,Potato,Modern,Wac663,Andigenum,hetero,Y,M-A,88,n/a,82.56,4.81,0.14,4.95
+Ranger,Potato,Modern,Huagalina,Andigenum,hetero,Y,M-A,30,45.7,81.5,2.71,1.07,3.78
+Ranger,Potato,Modern,Wac5,Andigenum,hetero,Y,M-A,71,49.99,105.5,3.66,0.81,4.47
+Ranger,Potato,Modern,Wac663,Andigenum,hetero,Y,M-A,51,48.31,86,6.39,1.2,7.59
+Snowden,Potato,Modern,Huagalina,Andigenum,hetero,Y,M-A,15,48.86,84,3.34,0.61,3.95
+Snowden,Potato,Modern,Wac5,Andigenum,hetero,Y,M-A,12,45.53,70,5.44,1.38,6.82
+Snowden,Potato,Modern,Wac663,Andigenum,hetero,Y,M-A,10,42.13,106.5,3.5,1.5,5
+Burbank,Potato,Modern,Cor.C.95(B),Chiletanum,hetero,Y,M-C,100,49.96,,,,0
+Burbank,Potato,Modern,Papa Cacho (B),Chiletanum,hetero,Y,M-C,48,50,61.32,4.94,0.85,5.79
+G.Chili,Potato,Modern,Cor.C.95(B),Chiletanum,hetero,Y,M-C,84,n/a,103.05,8.81,0.36,9.17
+G.Chili,Potato,Modern,Papa Cacho (B),Chiletanum,hetero,Y,M-C,23,n/a,61.3,9.21,0.77,9.98
+Ranger,Potato,Modern,Cor.C.95(B),Chiletanum,hetero,Y,M-C,61,46.07,64.5,4.82,0.42,5.24
+Ranger,Potato,Modern,Papa Cacho (B),Chiletanum,hetero,Y,M-C,1,53.9,88,6.23,1.14,7.37
+Snowden,Potato,Modern,Cor.C.95(B),Chiletanum,hetero,Y,M-C,35,44.34,95.5,3.38,1.22,4.6
+Snowden,Potato,Modern,Papa Cacho (B),Chiletanum,hetero,Y,M-C,85,43.51,94.5,2.56,1.22,3.78
+Burbank,Potato,Modern,Burbank (B),Modern,con,Y,M-M,55,49.7,90.5,4.06,0.61,4.67
+Burbank,Potato,Modern,G.Chili,Modern,con,Y,M-M,38,47.2,89.5,4.27,0.69,4.96
+Burbank,Potato,Modern,Ranger (B),Modern,con,Y,M-M,25,51.7,135.5,4.21,0.64,4.85
+Burbank,Potato,Modern,Snowden (B),Modern,con,Y,M-M,72,48.15,77,3.21,0.41,3.62
+G.Chili,Potato,Modern,Burbank (B),Modern,con,Y,M-M,11,n/a,62.97,4.13,0.29,4.42
+G.Chili,Potato,Modern,G.Chili,Modern,con,Y,M-M,73,n/a,88.93,10.17,0.72,10.89
+G.Chili,Potato,Modern,Ranger (B),Modern,con,Y,M-M,94,n/a,67.13,4.53,0.24,4.77
+G.Chili,Potato,Modern,Snowden (B),Modern,con,Y,M-M,31,n/a,81.92,10.58,1.23,11.81
+Ranger,Potato,Modern,Burbank (B),Modern,con,Y,M-M,62,44.75,83,6.54,1.19,7.73
+Ranger,Potato,Modern,G.Chili,Modern,con,Y,M-M,52,53.9,88.5,2.89,1.09,3.98
+Ranger,Potato,Modern,Ranger (B),Modern,con,Y,M-M,76,45.7,83.5,4.2,0.68,4.88
+Ranger,Potato,Modern,Snowden (B),Modern,con,Y,M-M,96,49.89,84.5,3.32,0.94,4.26
+Snowden,Potato,Modern,Burbank (B),Modern,con,Y,M-M,18,42.18,87,3.66,0.93,4.59
+Snowden,Potato,Modern,G.Chili,Modern,con,Y,M-M,41,38.85,105.5,5.71,1.39,7.1
+Snowden,Potato,Modern,Ranger (B),Modern,con,Y,M-M,80,47.38,90,7.18,,7.18
+Snowden,Potato,Modern,Snowden (B),Modern,con,Y,M-M,43,40.99,118.5,3.9,1.35,5.25
+Burbank,Potato,Modern,Sterile,Sterile,Sterile,N,M-S,13,46.3,,,,0
+G.Chili,Potato,Modern,Sterile,Sterile,Sterile,N,M-S,77,n/a,74.03,8.04,0.61,8.65
+Ranger,Potato,Modern,Sterile,Sterile,Sterile,N,M-S,39,48.3,88.67,4.7,0.18,4.88
+Snowden,Potato,Modern,Sterile,Sterile,Sterile,N,M-S,29,44.13,80,3.21,0.83,4.04
