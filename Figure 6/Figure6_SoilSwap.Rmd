@@ -1,5 +1,5 @@
 ---
-title: "Figure 9C and 9D: Between Clades and legacy type after soil swapping"
+title: "Figure 6: Between Clades and legacy type after soil swapping"
 output: html_notebook
 ---
 
