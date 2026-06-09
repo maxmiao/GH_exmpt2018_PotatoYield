@@ -1,5 +1,5 @@
 ---
-title: "R Notebook: Generation Figure 1"
+title: "Figure 1: NMDS ordination plot based on weighted UniFac distance"
 output: html_notebook
 ---
 
