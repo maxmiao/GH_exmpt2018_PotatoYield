@@ -5,10 +5,8 @@ output: html_notebook
 
 
 ```{r}
-ps1 = readRDS("/preprocessing/ps1_Clean_02182026.RDS")
+ps1 = readRDS("/preprocessing/ps1_BetaDiv_02182026.RDS")
 
-
-ps1.clean <- prune_samples(sample_sums(ps1) > 8000, ps1) #We can play around with this...
 ```
 
 
