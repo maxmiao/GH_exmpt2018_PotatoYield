@@ -112,6 +112,27 @@ ps <- merge_phyloseq(
 
 ps
 
+##Generate rarefraction curves for pruning: 
+```
+
+# 1. Extract the OTU/ASV table as a standard matrix
+otu_mat <- as(otu_table(ps_clean), "matrix")
+
+# 2. Vegan requires samples to be ROWS. If they are columns, transpose the matrix:
+if (taxa_are_rows(ps_clean)) {
+  otu_mat <- t(otu_mat)
+}
+
+# 3. Plot the rarefaction curves
+rarecurve(otu_mat, 
+          step = 250,             # Step size for calculation (lower = smoother but slower)
+          col = "blue",           # Color of lines
+          label = FALSE,          # Hide sample name labels to avoid visual clutter
+          xlab = "Read Depth", 
+          ylab = "Observed Taxa")
+
+# 4. Add a vertical line at a candidate cutoff (e.g., 5000 reads)
+abline(v = 5000, col = "red", lty = 2, lwd = 2)
 ```
 
 
@@ -130,149 +151,67 @@ ps_clean <- subset_taxa(
   !tolower(Family) %in% c("mitochondria", "chloroplast") &
   !tolower(Order)  %in% c("mitochondria", "chloroplast")
 )
-ps1_prune <- prune_samples(reads >= 8000, ps_clean)
+ps1_prune <- prune_samples(reads >= 5000, ps_clean)
 
 #Export for alpha diversity analysis: 
 #saveRDS(ps_clean,"ps1_AlphaDiv_02182026.RDS") #Use for Alpha Diversity
 
 ```
 
-
-```{r}
-# Apple 0.25% threshold (for beta diversity)
-ps_relabund <- transform_sample_counts(ps_clean, function(x) x / sum(x))
-keep_taxa <- taxa_names(ps_relabund)[apply(otu_table(ps_relabund), 1, function(x) any(x > 0.0025))]
-ps_filtered <- prune_taxa(keep_taxa, ps_clean)
-
-# Drop Zero abundance taxa (for beta diversity)
-ps_filtered <- prune_taxa(taxa_sums(ps_filtered) > 0, ps_filtered)
-```
-
-
-```{r}
-#saveRDS(ps_filtered,"ps1_filtered_02182026.RDS") #Use for Beta_diversity
-```
-
-
-#Quality Control for DESeq2:
+## Further Quality Control for DESeq2 and Beta Diversity:
 ```{r}
 # ===========================
 # 1. Remove singletons (ASVs in only 1 sample)
 # ===========================
-physeq_filtered <- filter_taxa(ps_clean, function(x) sum(x > 0) > 1, TRUE)
+ps_filtered <- filter_taxa(ps1_prune, function(x) sum(x > 0) > 1, TRUE)
 
 # ===========================
 # 2. Apply prevalence filter
-#    Keep ASVs present in at least 10% of samples
+#    Keep ASVs present in at least 10% of samples 
 # ===========================
 prevalenceThreshold <- 0.1
-sampleCountThreshold <- prevalenceThreshold * nsamples(physeq_filtered)
-physeq_filtered <- filter_taxa(physeq_filtered, function(x) sum(x > 0) >= sampleCountThreshold, TRUE)
+sampleCountThreshold <- ceiling(prevalenceThreshold * nsamples(ps_filtered))
+
+ps_filtered <- filter_taxa(
+  ps_filtered,
+  function(x) sum(x > 0) >= sampleCountThreshold,
+  TRUE
+)
+
+ps_desq = ps_filtered # singleton + prevalence filtering only
+
+#saveRDS(ps_desq,"ps1_DESeq2_02232026.RDS") #Use for DESEQ2 analysis
 
 # ===========================
 # 3. Apply relative abundance filter
-#    Keep ASVs that make up >0.25% of total reads in any sample
+#    Keep ASVs that make up >0.25% of total reads in any sample. For ASV filtering based on "0.25% in any sample", you need sample-wise relative abundance.
 # ===========================
-abundanceThreshold <- 0.0025
-physeq_filtered <- filter_taxa(physeq_filtered, function(x) any(x / sum(x) > abundanceThreshold), TRUE)
-
-#saveRDS(physeq_filtered,"ps1_DESeq2_02232026.RDS") #Use for DESEQ2 analysis
-
-```
-
-
-
-Check read counts: 
-```{r}
-library(data.table)
-ps1 = readRDS("ps1_filtered_02182026.RDS")
-
-readcount = data.table(as(sample_data(ps1), "data.frame"),
-                 TotalReads = sample_sums(ps1), 
-                 keep.rownames = TRUE)
-setnames(readcount, "rn", "Submission_ID")
-ggplot(readcount, aes(TotalReads)) + geom_histogram() + ggtitle("Sequencing Depth")
-```
-As we can see we have lots of samples that have not many reads...we need to find a good cutoff. We will now generate a rarefraction plot 
-
-
-
-
-```{r}
-#First need to remove samples with zero reads:
-ps1.clean <- prune_samples(sample_sums(ps1) > 0, ps1)
-
-readcount = data.table(as(sample_data(ps1.clean), "data.frame"),
-                 TotalReads = sample_sums(ps1.clean), 
-                 keep.rownames = TRUE)
-setnames(readcount, "rn", "Submission_ID")
-ggplot(readcount, aes(TotalReads)) + geom_histogram() + ggtitle("Sequencing Depth")
-```
-
-
-So it turns out we need to do more
-```{r}
-library(phyloseq)
-
-rarecurve(
-  t(otu_table(ps1.clean)),
-  step = 100,
-  sample = min(sample_sums(ps1.clean)),
-  col = "grey",
-  label = FALSE
+ps.rel <- transform_sample_counts(
+  ps_filtered,
+  function(x) x / sum(x)
 )
 
-
-```
-
-#Diagnosing issue related to rarefraction: 
-```{r}
-otu_mat <- as(otu_table(ps1), "matrix")
-if (taxa_are_rows(ps1)) otu_mat <- t(otu_mat)
-```
-
-
-```{r}
-rowSums(otu_mat == 0)
-rowSums(otu_mat > 0)
-rowSums(otu_mat)
-```
-
-
-```{r}
-bad_samples <- rownames(otu_mat)[rowSums(otu_mat > 0) < 2]
-bad_samples
-```
-
-
-```{r}
-ps1_clean <- prune_samples(
-  sample_names(ps1) %in% setdiff(sample_names(ps1), bad_samples),
-  ps1
+ps_filtered <- filter_taxa(
+  ps.rel,
+  function(x) any(x > 0.0025),
+  TRUE
 )
-```
 
-
-```{r}
-otu_mat <- as(otu_table(ps1_clean), "matrix")
-if (taxa_are_rows(ps1_clean)) otu_mat <- t(otu_mat)
-
-rarecurve(
-  otu_mat,
-  step   = 100,
-  sample = min(rowSums(otu_mat)),
-  col    = "grey",
-  label  = FALSE
+keep_taxa <- taxa_names(
+  filter_taxa(
+    ps.rel,
+    function(x) any(x > 0.0025),
+    TRUE
+  )
 )
-```
-So based on this; our cutoff will be 8000 for downstream analysis 
 
-```{r}
-ps1_filt <- prune_samples(reads >= 8000, ps1)
-```
-Notice that it originally had 356 we have 224 left.  
+ps_filtered <- prune_taxa(keep_taxa, ps_filtered)
+#This preserves the original counts while filtering based on relative abundance.
 
-```{r}
-#saveRDS(ps1_filt,"ps1_Clean_02182026.RDS")
+ps.beta = ps_filtered   # singleton + prevalence + abundance filtering
+#saveRDS(ps.beta,"ps1_BetaDiv_02182026.RDS")
+
+# ===========================
+# Note: Using 'any(x / sum(x) > abundanceThreshold)' what we initially did calculates relative abundance within each taxon across all samples, not within each sample. We made adjustment of ASV filtering based on at least 0.25% in any sample. 
 ```
 
