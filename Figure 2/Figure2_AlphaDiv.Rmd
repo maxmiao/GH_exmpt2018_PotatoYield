@@ -1,5 +1,5 @@
 ---
-title: "R Notebook"
+title: "Figure 2: Alpha Diversity Scatterplot between Clades across time at the ASV level after DADA2 processing"
 output: html_notebook
 ---
 
@@ -19,9 +19,6 @@ library(lmerTest)
 
 ```{r}
 ps1 = readRDS("/Preprocessing/ps1_AlphaDiv_02182026.RDS")
-
-
-ps1.clean <- prune_samples(sample_sums(ps1) > 8000, ps1)
 ps1.clean <- subset_samples(ps1.clean, Soil_type.x != "Sterile")
 
 ```
@@ -32,7 +29,7 @@ singleton_counts <- taxa_sums(ps1.clean) == 1
 table(singleton_counts)
 # TRUE = singletons, FALSE = non-singletons
 ```
-We have 8051 ASVs that are singletons vs 13 that are not. 
+We have 8048 ASVs that are not singletons vs 13 that are . 
 
 
 **Function to calculate Alpha Diversity:**
