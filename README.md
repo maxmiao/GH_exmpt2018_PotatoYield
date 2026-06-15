@@ -17,6 +17,7 @@ Raw sequencing data available at NCBI SRA under accession XXXX.
 
 ## Index
 
+- Data: 16S amplicon data generated
 - Preprocessing: Quality Control for downstream analysis
 - Figure 1: Beta Diversity 
 - Figure 2: Alpha Diversity and Richness
