@@ -3,8 +3,9 @@ Crop domestication and breeding history differential effects on root associated 
 
 ## Authors
 Max Miao<sup>1</sup> and Richard Lankau<sup>2</sup> 
-1 University of Wisconsin – Madison, Department of Plant Pathology; mjmiao@wisc.edu; ORCID: 0000-0002-1836-6292
-2 University of Wisconsin – Madison, Department of Plant Pathology; lankau@wisc.edu; ORCID: 0000-0001-9995-328X
+
+<sup>1</sup>University of Wisconsin – Madison, Department of Plant Pathology; mjmiao@wisc.edu; ORCID: 0000-0002-1836-6292
+<sup>2</sup>University of Wisconsin – Madison, Department of Plant Pathology; lankau@wisc.edu; ORCID: 0000-0001-9995-328X
 
 
 
