@@ -10,19 +10,18 @@ Max Miao<sup>1</sup> and Richard Lankau<sup>2</sup>
 
 
 ## Overview
-This repository contains all scripts used to generate figures and analyses.
+This repository contains all scripts used to generate figures for manuscript.
 
 ## Data Availability
 Raw sequencing data available at NCBI SRA under accession XXXX.
 
 ## Index
-1) Data: 16S Output from Qiime2 for Preprocessing
-2) Biomass: Biomass data for downstream PSF analysis 
-3) Preprocessing: Quality Control for downstream analysis
-4) Figure 1: Beta Diversity 
-5) Figure 2: Alpha Diversity and Richness
-6) Figure 3: DESeq Differential analysis across time
-7) Figure 4: DESeq Differential analysis between timepoint and potato clade
-8) Figure 5: Relative abundance
-9) Figure 6: Plant Soil Feedback results
-10) Figure 7: Soil Swapping Plant response results
+
+Preprocessing: Quality Control for downstream analysis
+Figure 1: Beta Diversity 
+Figure 2: Alpha Diversity and Richness
+Figure 3: DESeq Differential analysis across time
+Figure 4: DESeq Differential analysis between timepoint and potato clade
+Figure 5: Relative abundance
+Figure 6: Plant Soil Feedback results
+Figure 7: Soil Swapping Plant response results
