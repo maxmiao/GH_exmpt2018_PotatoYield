@@ -1,7 +1,12 @@
 # Title of Manuscript (TBD)
+Crop domestication and breeding history differential effects on root associated microbiome and subsequent plant-microbiome feedbacks
 
 ## Authors
-Max Miao and Richard Lankau.
+Max Miao1 and Richard Lankau2 
+1 University of Wisconsin – Madison, Department of Plant Pathology; mjmiao@wisc.edu; ORCID: 0000-0002-1836-6292
+2 University of Wisconsin – Madison, Department of Plant Pathology; lankau@wisc.edu; ORCID: 0000-0001-9995-328X
+<img width="471" height="97" alt="image" src="https://github.com/user-attachments/assets/f4b5b877-c4d6-4b70-b499-6391ee112b4d" />
+
 
 ## Overview
 This repository contains all scripts used to generate figures and analyses.
