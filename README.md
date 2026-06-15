@@ -18,10 +18,10 @@ Raw sequencing data available at NCBI SRA under accession XXXX.
 ## Index
 
 Preprocessing: Quality Control for downstream analysis
-Figure 1: Beta Diversity 
-Figure 2: Alpha Diversity and Richness
-Figure 3: DESeq Differential analysis across time
-Figure 4: DESeq Differential analysis between timepoint and potato clade
-Figure 5: Relative abundance
-Figure 6: Plant Soil Feedback results
-Figure 7: Soil Swapping Plant response results
+- Figure 1: Beta Diversity 
+- Figure 2: Alpha Diversity and Richness
+- Figure 3: DESeq Differential analysis across time
+- Figure 4: DESeq Differential analysis between timepoint and potato clade
+- Figure 5: Relative abundance
+- Figure 6: Plant Soil Feedback results
+- Figure 7: Soil Swapping Plant response results
