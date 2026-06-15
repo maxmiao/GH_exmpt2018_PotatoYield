@@ -17,7 +17,7 @@ Raw sequencing data available at NCBI SRA under accession XXXX.
 
 ## Index
 
-Preprocessing: Quality Control for downstream analysis
+- Preprocessing: Quality Control for downstream analysis
 - Figure 1: Beta Diversity 
 - Figure 2: Alpha Diversity and Richness
 - Figure 3: DESeq Differential analysis across time
